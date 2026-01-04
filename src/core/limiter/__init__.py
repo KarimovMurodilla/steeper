@@ -62,9 +62,8 @@ class FastAPILimiter:
         redis_client: aredis.Redis | str,
         prefix: str | None = None,
         identifier: Callable[[Request], Awaitable[str]] | None = None,
-        http_callback: None | (
-            Callable[[Request, Response, int], Awaitable[None]]
-        ) = None,
+        http_callback: None
+        | (Callable[[Request, Response, int], Awaitable[None]]) = None,
     ) -> None:
         """
         Initializes a Redis client, identifier and callback.

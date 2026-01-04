@@ -1,3 +1,6 @@
+from datetime import datetime
+from uuid import UUID
+
 from pydantic import BaseModel, ConfigDict, EmailStr, field_validator
 
 from src.core.utils.security import normalize_email
@@ -8,6 +11,15 @@ class Base(BaseModel):
     model_config = ConfigDict(
         from_attributes=True, use_enum_values=True, extra="forbid"
     )
+
+
+class IDSchema(Base):
+    id: UUID
+
+
+class TimestampSchema(Base):
+    created_at: datetime
+    updated_at: datetime | None = None
 
 
 class SuccessResponse(Base):

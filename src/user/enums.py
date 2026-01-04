@@ -1,10 +1,9 @@
 from enum import StrEnum
 
 
-class UserRole(StrEnum):
-    ADMIN = "admin"  # Full system access
-    EDITOR = "editor"  # Can edit content but not manage users or system settings
-    VIEWER = "viewer"  # Read-only access to authorized resources
+class SystemRole(StrEnum):
+    OWNER = "owner"  # Owner: pays for the service, creates bots, deletes workspace
+    MEMBER = "member"  # Member: has no permissions until granted access to resources
 
     @classmethod
     def values(cls) -> set[str]:

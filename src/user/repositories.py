@@ -6,5 +6,4 @@ logger = get_logger(__name__)
 
 
 class UserRepository(SoftDeleteRepository[User]):
-
     model = User

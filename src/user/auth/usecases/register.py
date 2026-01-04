@@ -50,7 +50,7 @@ class RegisterUseCase:
             )
             await uow.commit()
             logger.info(
-                "[Register User] User '%s' registered successfully.", data.username
+                "[Register User] User '%s' registered successfully.", data.email
             )
             return UserProfileViewModel.model_validate(user)
 

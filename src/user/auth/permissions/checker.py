@@ -8,13 +8,13 @@ from src.core.errors.exceptions import (
     PermissionDeniedException,
 )
 from src.user.auth.dependencies import get_current_user
-from src.user.auth.permissions.enum import Permission
-from src.user.auth.permissions.role_matrix import ROLE_PERMISSIONS
+from src.user.auth.permissions.enum import SystemPermission
+from src.user.auth.permissions.role_matrix import SYSTEM_ROLE_PERMISSIONS
 from src.user.models import User
 
 
 def require_permission(
-    required_permission: Permission,
+    required_permission: SystemPermission,
 ) -> Callable[[Annotated[User, Depends(get_current_user)]], User]:
     def checker(
         current_user: Annotated[User, Depends(get_current_user)],
@@ -29,9 +29,9 @@ def require_permission(
                 "You do not have permission to access this resource. Verified users only",
             )
 
-        permissions = ROLE_PERMISSIONS.get(current_user.role, set())
+        permissions = SYSTEM_ROLE_PERMISSIONS.get(current_user.role, set())
         if required_permission not in permissions:
-            raise PermissionDeniedException("Permission denied")
+            raise PermissionDeniedException("SystemPermission denied")
 
         return current_user
 

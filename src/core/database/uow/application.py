@@ -2,10 +2,19 @@ from typing import Any, cast
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.analytics.repositories import AuditLogRepository
+from src.bot.repositories.admin_bot_role import AdminBotRoleRepository
+from src.bot.repositories.bot import BotRepository
+from src.communication.repositories.chat import ChatRepository
+from src.communication.repositories.message import MessageRepository
 from src.core.database.repositories import BaseRepository
 from src.core.database.uow.abstract import R, RepositoryProtocol
 from src.core.database.uow.sqlalchemy import RepositoryInstance, SQLAlchemyUnitOfWork
+from src.crm.repositories import TelegramUserRepository
+from src.marketing.repositories.broadcast import BroadcastRepository
+from src.marketing.repositories.broadcast_delivery import BroadcastDeliveryRepository
 from src.user.repositories import UserRepository
+from src.workspace.repositories import WorkspaceRepository
 
 
 class ApplicationUnitOfWork(SQLAlchemyUnitOfWork[R]):
@@ -56,7 +65,41 @@ class ApplicationUnitOfWork(SQLAlchemyUnitOfWork[R]):
         """
         return self._get_repository(UserRepository)
 
-    # Add more repository properties as needed
+    @property
+    def audit_logs(self) -> AuditLogRepository:
+        return self._get_repository(AuditLogRepository)
+
+    @property
+    def bots(self) -> BotRepository:
+        return self._get_repository(BotRepository)
+
+    @property
+    def admin_bot_roles(self) -> AdminBotRoleRepository:
+        return self._get_repository(AdminBotRoleRepository)
+
+    @property
+    def chats(self) -> ChatRepository:
+        return self._get_repository(ChatRepository)
+
+    @property
+    def messages(self) -> MessageRepository:
+        return self._get_repository(MessageRepository)
+
+    @property
+    def telegram_users(self) -> TelegramUserRepository:
+        return self._get_repository(TelegramUserRepository)
+
+    @property
+    def broadcasts(self) -> BroadcastRepository:
+        return self._get_repository(BroadcastRepository)
+
+    @property
+    def broadcast_deliveries(self) -> BroadcastDeliveryRepository:
+        return self._get_repository(BroadcastDeliveryRepository)
+
+    @property
+    def workspaces(self) -> WorkspaceRepository:
+        return self._get_repository(WorkspaceRepository)
 
 
 async def get_uow(session: AsyncSession) -> ApplicationUnitOfWork[RepositoryProtocol]:

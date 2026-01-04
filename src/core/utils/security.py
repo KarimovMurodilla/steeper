@@ -42,6 +42,21 @@ async def verify_password(plain_password: str, hashed_password: str) -> bool:
         )
     except ValueError:
         return False
+    
+
+def hash_token(token: str) -> str:
+    """
+    Creates a SHA-256 hash of a token.
+    Used for secure lookups of bots by token without storing the raw token in plaintext
+    for search purposes.
+
+    Args:
+        token: The raw API token (e.g., Telegram bot token).
+
+    Returns:
+        str: The hexadecimal SHA-256 hash string.
+    """
+    return hashlib.sha256(token.encode()).hexdigest()
 
 
 def generate_otp() -> str:

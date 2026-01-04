@@ -169,6 +169,10 @@ class AppConfig(BaseModel):
     PROJECT_NAME: str
     PROJECT_SECRET_KEY: str
 
+    ENCRYPTION_LENGTH: int
+    ENCRYPTION_SALT: str
+    ENCRYPTION_ITERATIONS: int
+
     PING_INTERVAL: int
     CONNECTION_TTL: int
 

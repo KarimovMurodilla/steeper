@@ -18,7 +18,6 @@ logger = get_logger(__name__)
 
 
 class CacheManager(BaseCacheManager, AbstractCacheManager):
-
     @staticmethod
     async def key_builder(  # type: ignore
         func: Callable[..., Any],
