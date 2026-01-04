@@ -65,9 +65,9 @@ class LogBotMessageUseCase:
                 "chat_id": chat.id,
                 "sender_type": SenderType.BOT,
                 "message_type": msg_type,
+                "tg_message_id": payload.message_id,
                 "content": payload.text,
                 "metadata_info": {
-                    "tg_message_id": payload.message_id,
                     "tg_date": payload.date,
                 },
             }

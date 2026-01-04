@@ -13,13 +13,16 @@ from src.core.errors.exceptions import (
     InstanceNotFoundException,
 )
 from src.user.auth.dependencies import get_current_user
-from src.user.enums import SystemRole
+from src.workspace.dependencies import get_current_workspace_member
+from src.workspace.enums import WorkspaceRole
 from src.user.models import User
+from src.workspace.models import WorkspaceMember
+
 
 
 async def get_current_bot_role(
     bot_id: Annotated[UUID, Path(...)],
-    user: Annotated[User, Depends(get_current_user)],
+    member: Annotated[WorkspaceMember, Depends(get_current_workspace_member)],
     session: Annotated[AsyncSession, Depends(get_session)],
 ) -> BotRole:
     """
@@ -32,14 +35,14 @@ async def get_current_bot_role(
         raise InstanceNotFoundException("Bot not found")
 
     is_system_owner = (
-        user.role == SystemRole.OWNER and user.workspace_id == bot.workspace_id
+        member.role == WorkspaceRole.OWNER and member.workspace_id == bot.workspace_id
     )
 
     if is_system_owner:
         return BotRole.ADMIN
 
     role = await AdminBotRoleRepository().get_role(
-        session, admin_id=user.id, bot_id=bot_id
+        session, admin_id=member.user_id, bot_id=bot_id
     )
 
     if not role:

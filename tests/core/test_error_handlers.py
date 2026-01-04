@@ -165,7 +165,7 @@ async def test_filtering_error_handler_logs_warning(
             handlers.PermissionDeniedExceptionHandler,
             PermissionDeniedException,
             403,
-            "SystemPermission Denied",
+            "Permission Denied",
             logging.WARNING,
             True,
         ),

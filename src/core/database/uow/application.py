@@ -14,7 +14,8 @@ from src.crm.repositories import TelegramUserRepository
 from src.marketing.repositories.broadcast import BroadcastRepository
 from src.marketing.repositories.broadcast_delivery import BroadcastDeliveryRepository
 from src.user.repositories import UserRepository
-from src.workspace.repositories import WorkspaceRepository
+from src.workspace.repositories.workspace import WorkspaceRepository
+from src.workspace.repositories.workspace_member import WorkspaceMemberRepository
 
 
 class ApplicationUnitOfWork(SQLAlchemyUnitOfWork[R]):
@@ -100,6 +101,10 @@ class ApplicationUnitOfWork(SQLAlchemyUnitOfWork[R]):
     @property
     def workspaces(self) -> WorkspaceRepository:
         return self._get_repository(WorkspaceRepository)
+    
+    @property
+    def workspace_members(self) -> WorkspaceMemberRepository:
+        return self._get_repository(WorkspaceMemberRepository)
 
 
 async def get_uow(session: AsyncSession) -> ApplicationUnitOfWork[RepositoryProtocol]:

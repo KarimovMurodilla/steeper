@@ -9,10 +9,10 @@ from src.bot.usecases.create_bot import (
 )
 from src.user.auth.dependencies import get_current_user
 from src.user.auth.permissions.checker import require_permission
-from src.user.auth.permissions.enum import SystemPermission
+from src.workspace.permissions.enum import WorkspacePermission
 from src.user.models import User
 
-router = APIRouter(prefix="/bots", tags=["Bots"])
+router = APIRouter()
 
 
 @router.post(
@@ -24,7 +24,7 @@ async def create_bot(
     bot_data: BotCreateRequest,
     current_user: Annotated[User, Depends(get_current_user)],
     use_case: Annotated[CreateBotUseCase, Depends(get_create_bot_use_case)],
-    _=Depends(require_permission(SystemPermission.CREATE_BOT)),
+    _=Depends(require_permission(WorkspacePermission.CREATE_BOT)),
 ) -> BotViewModel:
     """
     Creates a new bot in the current user's workspace.

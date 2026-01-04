@@ -3,14 +3,15 @@ from uuid import UUID
 from pydantic import EmailStr
 
 from src.core.schemas import Base
-from src.user.enums import SystemRole
+from src.workspace.enums import WorkspaceRole
 
 
 class UserProfileViewModel(Base):
     id: UUID
     first_name: str
     last_name: str
-    role: SystemRole
+    username: str
+    phone_number: str
     email: EmailStr
     is_verified: bool
 

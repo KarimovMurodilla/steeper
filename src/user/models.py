@@ -1,7 +1,6 @@
-from typing import TYPE_CHECKING, List, Optional
-from uuid import UUID as PY_UUID
+from typing import TYPE_CHECKING
 
-from sqlalchemy import Boolean, Enum as SQLEnum, ForeignKey, Index, String, text
+from sqlalchemy import Boolean, String, Index, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship, validates
 
 from src.core.database.base import Base
@@ -11,11 +10,10 @@ from src.core.database.mixins import (
     UUIDIDMixin,
 )
 from src.core.utils.security import hash_password
-from src.user.enums import SystemRole
 
 if TYPE_CHECKING:
     from src.bot.models import AdminBotRole
-    from src.workspace.models import Workspace
+    from src.workspace.models import WorkspaceMember
 
 
 class User(Base, UUIDIDMixin, TimestampMixin, SoftDeleteMixin):
@@ -27,29 +25,31 @@ class User(Base, UUIDIDMixin, TimestampMixin, SoftDeleteMixin):
             unique=True,
             postgresql_where=text("is_deleted = false"),
         ),
-    )
-
-    workspace_id: Mapped[Optional[PY_UUID]] = mapped_column(
-        ForeignKey("workspaces.id"), nullable=True
+        Index(
+            "uq_users_username_not_deleted",
+            "username",
+            unique=True,
+            postgresql_where=text("is_deleted = false"),
+        ),
     )
 
     first_name: Mapped[str] = mapped_column(String(50))
     last_name: Mapped[str] = mapped_column(String(50))
     email: Mapped[str] = mapped_column(String(255))
+    username: Mapped[str] = mapped_column(String(60))
+    phone_number: Mapped[str] = mapped_column(String(20))
     password: Mapped[str] = mapped_column(String(255))
 
-    # Global Platform Role (not bot specific)
-    role: Mapped[SystemRole] = mapped_column(
-        SQLEnum(SystemRole), nullable=False, default=SystemRole.MEMBER
-    )
-
-    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    is_superuser: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     is_verified: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
     # Relationships
-    workspace: Mapped["Workspace"] = relationship("Workspace", back_populates="users")
-    bot_roles: Mapped[List["AdminBotRole"]] = relationship(
-        "AdminBotRole", back_populates="admin"
+    memberships: Mapped[list["WorkspaceMember"]] = relationship(
+        "WorkspaceMember", back_populates="user", cascade="all, delete-orphan"
+    )
+    bot_roles: Mapped[list["AdminBotRole"]] = relationship(
+        "AdminBotRole", back_populates="admin", cascade="all, delete-orphan"
     )
 
     @validates("password")

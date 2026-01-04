@@ -17,3 +17,4 @@ from src.marketing.models import (
 )
 from src.user.models import User as User  # Re-export the User model explicitly
 from src.workspace.models import Workspace as Workspace
+from src.workspace.models import WorkspaceMember as WorkspaceMember

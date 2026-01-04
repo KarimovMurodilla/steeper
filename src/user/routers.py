@@ -15,7 +15,7 @@ from src.user.auth.dependencies import (
     get_user_id_from_token,
 )
 from src.user.auth.permissions.checker import require_permission
-from src.user.auth.permissions.enum import SystemPermission
+from src.workspace.permissions.enum import WorkspacePermission
 from src.user.auth.routers import router as auth_router
 from src.user.auth.schemas import UserNewPassword
 from src.user.dependencies import get_user_service
@@ -51,12 +51,12 @@ async def get_user_profile(
 @router.get("/{user_id}", response_model=UserSummaryViewModel)
 async def get_user_info_by_id(
     user_id: UUID,
-    # SystemPermission check: this dependency ensures the caller has the VIEW_USERS permission.
+    # WorkspacePermission check: this dependency ensures the caller has the VIEW_USERS permission.
     # In most real-world cases you'll also want a domain-specific checker - for example,
     # verifying that the requested user belongs to the same company/group as the requester.
     # Implement such logic as a separate dependency (custom checker) and compose it here.
     current_user: Annotated[
-        User, Depends(require_permission(SystemPermission.MANAGE_MEMBERS))
+        User, Depends(require_permission(WorkspacePermission.VIEW_MEMBERS))
     ],
     user_service: Annotated[UserService, Depends(get_user_service)],
     session: AsyncSession = Depends(get_session),

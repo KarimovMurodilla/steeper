@@ -49,6 +49,7 @@ class Message(Base, UUID7IDMixin, TimestampMixin):
     sender_type: Mapped[SenderType] = mapped_column(SQLEnum(SenderType))
     message_type: Mapped[MessageType] = mapped_column(SQLEnum(MessageType))
 
+    tg_message_id: Mapped[Optional[int]] = mapped_column(nullable=True)
     content: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     metadata_info: Mapped[dict] = mapped_column(
         JSONB, default=dict

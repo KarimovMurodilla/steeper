@@ -8,14 +8,23 @@ from src.core.errors.exceptions import (
     PermissionDeniedException,
 )
 from src.user.auth.dependencies import get_current_user
-from src.user.auth.permissions.enum import SystemPermission
-from src.user.auth.permissions.role_matrix import SYSTEM_ROLE_PERMISSIONS
+from src.user.auth.permissions.enum import PlatformPermission
 from src.user.models import User
 
 
 def require_permission(
-    required_permission: SystemPermission,
+    required_permission: PlatformPermission,
 ) -> Callable[[Annotated[User, Depends(get_current_user)]], User]:
+    """
+    Global Permission Checker.
+    
+    Scope:
+    - Checks User status (active/verified).
+    - Checks Platform-level permissions (Superuser actions).
+    - Checks Self-management permissions (Profile).
+    
+    Do NOT use this for Workspace or Bot actions.
+    """
     def checker(
         current_user: Annotated[User, Depends(get_current_user)],
     ) -> User:
@@ -29,10 +38,9 @@ def require_permission(
                 "You do not have permission to access this resource. Verified users only",
             )
 
-        permissions = SYSTEM_ROLE_PERMISSIONS.get(current_user.role, set())
-        if required_permission not in permissions:
-            raise PermissionDeniedException("SystemPermission denied")
+        if current_user.is_superuser:
+            return current_user
 
-        return current_user
+        raise PermissionDeniedException("Global Permission denied. Superuser privileges required.")
 
     return checker

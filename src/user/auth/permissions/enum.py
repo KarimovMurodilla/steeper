@@ -1,9 +1,15 @@
 from enum import StrEnum
 
 
-class SystemPermission(StrEnum):
-    # --- WORKSPACE / GLOBAL PERMISSIONS ---
-    MANAGE_BILLING = "workspace:manage_billing"
-    MANAGE_MEMBERS = "workspace:manage_members"
-    CREATE_BOT = "workspace:create_bot"
-    DELETE_BOT = "workspace:delete_bot"
+class PlatformPermission(StrEnum):
+    """
+    Global Permissions for the User entity and Platform Administration.
+    Checked against User.is_superuser or basic authentication.
+    """
+
+    # Superuser / Platform Admin (Steeper Staff)
+    # These grant access to the "God Mode" admin panel
+    VIEW_SYSTEM_LOGS = "system:view_logs"
+    MANAGE_PLATFORM_SETTINGS = "system:manage_platform_settings"
+    BLOCK_USER = "system:block_user"
+    VIEW_ALL_WORKSPACES = "system:view_all_workspaces"

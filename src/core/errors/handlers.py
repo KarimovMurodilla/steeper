@@ -283,7 +283,7 @@ class NotAcceptableExceptionHandler:
 
 class PermissionDeniedExceptionHandler:
     async def __call__(self, request: Request, exc: CoreException) -> JSONResponse:
-        error_type = "SystemPermission Denied"
+        error_type = "Permission Denied"
         log_msg = format_log_message(
             request, error_type, exc.message, exc.additional_info
         )

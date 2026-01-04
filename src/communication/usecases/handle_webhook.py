@@ -83,9 +83,9 @@ class HandleWebhookUseCase:
                 "chat_id": chat.id,
                 "sender_type": SenderType.USER,
                 "message_type": msg_type,
+                "tg_message_id": tg_msg.message_id,
                 "content": content,
                 "metadata_info": {
-                    "tg_message_id": tg_msg.message_id,
                     "tg_date": tg_msg.date,
                 },
             }
