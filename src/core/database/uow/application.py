@@ -101,7 +101,7 @@ class ApplicationUnitOfWork(SQLAlchemyUnitOfWork[R]):
     @property
     def workspaces(self) -> WorkspaceRepository:
         return self._get_repository(WorkspaceRepository)
-    
+
     @property
     def workspace_members(self) -> WorkspaceMemberRepository:
         return self._get_repository(WorkspaceMemberRepository)

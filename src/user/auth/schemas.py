@@ -18,7 +18,6 @@ class CreateUserModel(StrongPasswordValidationMixin, EmailNormalizationMixin, Ba
     last_name: str
     email: EmailStr
     username: str
-    phone_number: str = Field(min_length=PHONE_NUMBER_MIN_LENGTH)
     password: str
 
     @field_validator("first_name")
@@ -33,15 +32,6 @@ class CreateUserModel(StrongPasswordValidationMixin, EmailNormalizationMixin, Ba
     def validate_last_name(cls, value: str) -> str:
         if not FULL_NAME_PATTERN.match(value):
             raise ValueError("Last name must contain latin letters and spaces only")
-        return value
-
-    @field_validator("phone_number")
-    @classmethod
-    def validate_phone_number(cls, value: str) -> str:
-        if not PHONE_NUMBER_REGEX.match(value):
-            raise ValueError(
-                "Phone number must contain only digits (optionally starting with '+') and be 5–20 characters long."
-            )
         return value
 
     @field_validator("username")

@@ -2,7 +2,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, status
 
-from src.communication.schemas import TelegramUpdatePayload, BotMessagePayload
+from src.communication.schemas import BotMessagePayload, TelegramUpdatePayload
 from src.communication.usecases.handle_webhook import (
     HandleWebhookUseCase,
     get_handle_webhook_use_case,

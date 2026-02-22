@@ -14,3 +14,13 @@ extend-ignore = ["E501"]
 known-first-party = ["celery_tasks", "loggers", "models", "src"]
 combine-as-imports = true
 force-sort-within-sections = true
+
+[tool.pyrefly]
+project-includes = ["src"]
+project-excludes = ["**/.[!/.]*", "**/tests"]
+search-path = ["."]
+site-package-path = ["venv/lib/python3.12/site-packages"]
+[tool.pyrefly.errors]
+bad-assignment = false
+invalid-argument = false
+bad-return = false

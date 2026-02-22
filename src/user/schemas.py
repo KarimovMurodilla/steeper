@@ -3,7 +3,6 @@ from uuid import UUID
 from pydantic import EmailStr
 
 from src.core.schemas import Base
-from src.workspace.enums import WorkspaceRole
 
 
 class UserProfileViewModel(Base):
@@ -11,7 +10,6 @@ class UserProfileViewModel(Base):
     first_name: str
     last_name: str
     username: str
-    phone_number: str
     email: EmailStr
     is_verified: bool
 
@@ -28,4 +26,3 @@ class UserSummaryWithContactsViewModel(Base):
     full_name: str
     username: str
     email: EmailStr
-    phone_number: str

@@ -17,14 +17,15 @@ def require_permission(
 ) -> Callable[[Annotated[User, Depends(get_current_user)]], User]:
     """
     Global Permission Checker.
-    
+
     Scope:
     - Checks User status (active/verified).
     - Checks Platform-level permissions (Superuser actions).
     - Checks Self-management permissions (Profile).
-    
+
     Do NOT use this for Workspace or Bot actions.
     """
+
     def checker(
         current_user: Annotated[User, Depends(get_current_user)],
     ) -> User:
@@ -41,6 +42,8 @@ def require_permission(
         if current_user.is_superuser:
             return current_user
 
-        raise PermissionDeniedException("Global Permission denied. Superuser privileges required.")
+        raise PermissionDeniedException(
+            "Global Permission denied. Superuser privileges required."
+        )
 
     return checker

@@ -1,4 +1,3 @@
-
 from fastapi import Depends
 
 from loggers import get_logger
@@ -41,12 +40,14 @@ class LogBotMessageUseCase:
             if not bot.status == "active":
                 logger.info("Webhook skipped for disabled bot: %s", bot.id)
                 return SuccessResponse(success=True)
-            
+
             tg_user = await uow.telegram_users.get_single(
                 session=uow.session, tg_user_id=payload.chat_id, bot_id=bot.id
             )
 
-            chat = await uow.chats.get_single(session=uow.session, bot_id=bot.id, telegram_user_id=tg_user.id)
+            chat = await uow.chats.get_single(
+                session=uow.session, bot_id=bot.id, telegram_user_id=tg_user.id
+            )
 
             if not chat:
                 chat = await uow.chats.create(
@@ -59,7 +60,7 @@ class LogBotMessageUseCase:
                 )
                 await uow.session.flush()
 
-            msg_type = MessageType.TEXT # TODO: Determine message type based on payload
+            msg_type = MessageType.TEXT  # TODO: Determine message type based on payload
 
             msg_data = {
                 "chat_id": chat.id,

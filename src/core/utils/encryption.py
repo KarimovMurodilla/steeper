@@ -1,6 +1,4 @@
 import base64
-import os
-from typing import Optional
 
 from cryptography.fernet import Fernet
 from cryptography.hazmat.primitives import hashes

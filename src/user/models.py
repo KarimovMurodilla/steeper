@@ -1,6 +1,6 @@
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Boolean, String, Index, text
+from sqlalchemy import Boolean, Index, String, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship, validates
 
 from src.core.database.base import Base
@@ -37,7 +37,6 @@ class User(Base, UUIDIDMixin, TimestampMixin, SoftDeleteMixin):
     last_name: Mapped[str] = mapped_column(String(50))
     email: Mapped[str] = mapped_column(String(255))
     username: Mapped[str] = mapped_column(String(60))
-    phone_number: Mapped[str] = mapped_column(String(20))
     password: Mapped[str] = mapped_column(String(255))
 
     is_superuser: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)

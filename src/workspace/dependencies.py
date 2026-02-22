@@ -1,21 +1,24 @@
+from src.workspace.services.workspace_member import WorkspaceMemberService
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import Depends, Header, HTTPException, status
-from sqlalchemy import select
+from fastapi import Depends, Header
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.database.session import get_session
+from src.core.errors.exceptions import PermissionDeniedException
 from src.user.auth.dependencies import get_current_user
 from src.user.models import User
 from src.workspace.models import WorkspaceMember
+from src.workspace.repositories.workspace import WorkspaceRepository
 from src.workspace.repositories.workspace_member import WorkspaceMemberRepository
-
-from src.core.errors.exceptions import PermissionDeniedException
+from src.workspace.services.workspace import WorkspaceService
 
 
 async def get_current_workspace_id(
-    x_workspace_id: Annotated[UUID, Header(alias="X-Workspace-ID", description="ID of the active workspace")],
+    x_workspace_id: Annotated[
+        UUID, Header(alias="X-Workspace-ID", description="ID of the active workspace")
+    ],
 ) -> UUID:
     """
     Extracts the workspace ID from the request headers.
@@ -42,5 +45,19 @@ async def get_current_workspace_member(
         raise PermissionDeniedException(
             "You are not a member of this workspace or it does not exist."
         )
-    
+
     return member
+
+
+async def get_workspace_service() -> WorkspaceService:
+    workspace_repo = WorkspaceRepository()
+    return WorkspaceService(
+        repository=workspace_repo,
+    )
+
+
+async def get_workspace_member_service() -> WorkspaceMemberService:
+    workspace_member_repo = WorkspaceMemberRepository()
+    return WorkspaceMemberService(
+        repository=workspace_member_repo,
+    )

@@ -4,15 +4,17 @@ from typing import Annotated
 from fastapi import Depends
 
 from src.core.errors.exceptions import PermissionDeniedException
-from src.workspace.permissions.enum import WorkspacePermission
-from src.workspace.permissions.role_matrix import WORKSPACE_ROLE_PERMISSIONS 
 from src.workspace.dependencies import get_current_workspace_member
 from src.workspace.models import WorkspaceMember
+from src.workspace.permissions.enum import WorkspacePermission
+from src.workspace.permissions.role_matrix import WORKSPACE_ROLE_PERMISSIONS
 
 
 def require_workspace_permission(
     required_permission: WorkspacePermission,
-) -> Callable[[Annotated[WorkspaceMember, Depends(get_current_workspace_member)]], WorkspaceMember]:
+) -> Callable[
+    [Annotated[WorkspaceMember, Depends(get_current_workspace_member)]], WorkspaceMember
+]:
     """
     Checks if the user has the required permission WITHIN the current workspace context.
     """

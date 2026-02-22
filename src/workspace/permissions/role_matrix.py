@@ -1,7 +1,6 @@
 from src.workspace.enums import WorkspaceRole
 from src.workspace.permissions.enum import WorkspacePermission
 
-
 WORKSPACE_ROLE_PERMISSIONS: dict[WorkspaceRole, set[WorkspacePermission]] = {
     WorkspaceRole.OWNER: {
         WorkspacePermission.VIEW_DASHBOARD,

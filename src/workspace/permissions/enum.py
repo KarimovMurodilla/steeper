@@ -6,7 +6,7 @@ class WorkspacePermission(StrEnum):
     Permissions related to managing a Workspace resource.
     Checked against WorkspaceMember role (Owner/Member).
     """
-    
+
     # Dashboard & Analytics
     VIEW_DASHBOARD = "workspace:view_dashboard"
 

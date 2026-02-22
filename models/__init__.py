@@ -15,6 +15,8 @@ from src.marketing.models import (
     Broadcast as Broadcast,
     BroadcastDelivery as BroadcastDelivery,
 )
-from src.user.models import User as User  # Re-export the User model explicitly
-from src.workspace.models import Workspace as Workspace
-from src.workspace.models import WorkspaceMember as WorkspaceMember
+from src.user.models import User as User
+from src.workspace.models import (
+    Workspace as Workspace,
+    WorkspaceMember as WorkspaceMember,
+)

@@ -4,7 +4,7 @@ from uuid import UUID
 
 from pydantic import Field, field_validator
 
-from src.bot.enums import BotStatus
+from src.bot.enums import BotStatus, BotRole
 from src.core.schemas import Base
 
 
@@ -36,6 +36,7 @@ class BotViewModel(Base):
     id: UUID
     workspace_id: UUID
     name: str
+    admin_roles: list["AdminBotRoleViewModel"]
     status: BotStatus
     created_at: datetime
 
@@ -51,11 +52,9 @@ class BotSummaryViewModel(Base):
 class AdminBotRoleViewModel(Base):
     admin_id: UUID
     bot_id: UUID
-    role_name: str
-    permissions: dict[str, Any]
+    role: BotRole
 
 
 class AdminBotRoleAssignModel(Base):
     admin_id: UUID
     role_name: str
-    permissions: dict[str, Any] = Field(default_factory=dict)

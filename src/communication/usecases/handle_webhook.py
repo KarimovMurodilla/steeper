@@ -1,4 +1,3 @@
-
 from fastapi import Depends
 
 from loggers import get_logger

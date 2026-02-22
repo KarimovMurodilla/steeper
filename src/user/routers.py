@@ -15,7 +15,6 @@ from src.user.auth.dependencies import (
     get_user_id_from_token,
 )
 from src.user.auth.permissions.checker import require_permission
-from src.workspace.permissions.enum import WorkspacePermission
 from src.user.auth.routers import router as auth_router
 from src.user.auth.schemas import UserNewPassword
 from src.user.dependencies import get_user_service
@@ -29,6 +28,7 @@ from src.user.usecases.update_password import (
     UpdateUserPasswordUseCase,
     get_update_user_password_use_case,
 )
+from src.workspace.permissions.enum import WorkspacePermission
 
 router = APIRouter()
 

@@ -1,3 +1,5 @@
+from src.bot.services.bot import BotService
+from src.bot.repositories.bot import BotRepository
 from typing import Annotated
 from uuid import UUID
 
@@ -12,12 +14,9 @@ from src.core.errors.exceptions import (
     AccessForbiddenException,
     InstanceNotFoundException,
 )
-from src.user.auth.dependencies import get_current_user
 from src.workspace.dependencies import get_current_workspace_member
 from src.workspace.enums import WorkspaceRole
-from src.user.models import User
 from src.workspace.models import WorkspaceMember
-
 
 
 async def get_current_bot_role(
@@ -49,3 +48,11 @@ async def get_current_bot_role(
         raise AccessForbiddenException("You do not have access to this bot")
 
     return role
+
+
+async def get_bot_service() -> BotService:
+    """
+    Dependency to get the BotService.
+    """
+    repo = BotRepository()
+    return BotService(repository=repo)

@@ -1,3 +1,4 @@
+from src.bot.enums import BotRole
 from uuid import UUID
 
 from fastapi import Depends
@@ -12,6 +13,7 @@ from src.core.errors.exceptions import (
 )
 from src.core.utils.encryption import encrypt_token
 from src.core.utils.security import hash_token
+from src.core.errors.exceptions import CoreException
 
 logger = get_logger(__name__)
 
@@ -40,7 +42,7 @@ class CreateBotUseCase:
 
         bot_info = await self.tg_service.get_me(data.token)
         if not bot_info:
-            raise ValueError("Invalid Telegram Bot Token")
+            raise CoreException("Invalid Telegram Bot Token")
 
         async with self.uow as uow:
             token_hash = hash_token(data.token)
@@ -55,11 +57,25 @@ class CreateBotUseCase:
             }
 
             new_bot = await uow.bots.create(uow.session, bot_data)
+
+            await uow.session.flush()
+
+            await uow.admin_bot_roles.create(uow.session, {
+                "admin_id": user_id,
+                "bot_id": new_bot.id,
+                "role": BotRole.ADMIN,
+            })
+            # Eagerly load the relationship while the session/transaction is still open.
+            # Accessing it after commit raises "Can't operate on closed transaction".
+            await uow.session.refresh(new_bot, ["admin_roles"])
+
+            result = BotViewModel.model_validate(new_bot)
+
             await uow.commit()
 
             logger.info(f"Bot created successfully: {new_bot.id} by Admin {user_id}")
 
-            return BotViewModel.model_validate(new_bot)
+            return result
 
 
 def get_create_bot_use_case(

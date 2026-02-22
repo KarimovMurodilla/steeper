@@ -2,6 +2,8 @@ from fastapi import APIRouter, FastAPI
 from fastapi.exceptions import RequestValidationError
 from pydantic import ValidationError
 
+from src.bot import routers as bot_routers
+from src.communication import routers as communication_routers
 from src.core.errors.exceptions import (
     AccessForbiddenException,
     CoreException,
@@ -33,8 +35,7 @@ from src.system import routers as system_routers
 
 # Import routers here
 from src.user import routers as user_routers
-from src.communication import routers as communication_routers
-from src.bot import routers as bot_routers
+from src.workspace import routers as workspace_routers
 
 
 def include_routers(app: FastAPI) -> None:
@@ -54,6 +55,9 @@ def include_routers(app: FastAPI) -> None:
         communication_routers.router, prefix="/communications", tags=["Communications"]
     )
     v1_router.include_router(bot_routers.router, prefix="/bots", tags=["Bots"])
+    v1_router.include_router(
+        workspace_routers.router, prefix="/workspaces", tags=["Workspaces"]
+    )
 
     app.include_router(v1_router, prefix="/v1")
     app.include_router(system_routers.router, tags=["System"])

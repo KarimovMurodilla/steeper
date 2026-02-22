@@ -1,5 +1,3 @@
-from typing import Optional
-
 from typing import Any, Optional
 
 from aiogram import Bot
@@ -9,11 +7,6 @@ from aiogram.exceptions import TelegramAPIError, TelegramUnauthorizedError
 from aiogram.types import BotCommand, LinkPreviewOptions, User
 
 from loggers import get_logger
-from src.bot.models import Bot as BotModel
-from src.bot.repositories.bot import BotRepository
-from src.bot.schemas import BotCreateRequest, BotViewModel
-from src.core.schemas import Base
-from src.core.services import BaseService
 
 logger = get_logger(__name__)
 
@@ -148,9 +141,7 @@ class TelegramAPIService:
             )
             return message.model_dump()
         except TelegramAPIError as e:
-            logger.error(
-                "Failed to send message to chat %s: %s", chat_id, e
-            )
+            logger.error("Failed to send message to chat %s: %s", chat_id, e)
             return None
         finally:
             await self._close_bot_session(bot)

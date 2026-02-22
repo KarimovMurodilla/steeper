@@ -42,7 +42,7 @@ async def verify_password(plain_password: str, hashed_password: str) -> bool:
         )
     except ValueError:
         return False
-    
+
 
 def hash_token(token: str) -> str:
     """

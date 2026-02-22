@@ -55,9 +55,6 @@ class AdminBotRole(Base, UUIDIDMixin, TimestampMixin):
     role: Mapped[BotRole] = mapped_column(
         SQLEnum(BotRole), nullable=False, default=BotRole.VIEWER
     )
-    permissions: Mapped[dict] = mapped_column(
-        JSONB, default=dict
-    )  # Extensible permissions
 
     # Relationships
     admin: Mapped["User"] = relationship("User", back_populates="bot_roles")
