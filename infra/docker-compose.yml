@@ -3,20 +3,20 @@
 
 services:
   app-builder:
-    container_name: template-app-builder
+    container_name: steeper-app-builder
     build:
       context: ..
       dockerfile: infra/docker/Dockerfile
-    image: template-app-image:latest
+    image: steeper-app-image:latest
     networks:
-      - app-network
+      - steeper-network
 
   postgres:
-    container_name: template-postgres
+    container_name: steeper-postgres
     build:
       context: ..
       dockerfile: infra/postgres/Dockerfile-postgis
-    image: template-postgres-postgis:18
+    image: steeper-postgres-postgis:18
     restart: always
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
@@ -34,7 +34,7 @@ services:
     volumes:
       - postgres-data-steeper:/var/lib/postgresql
     networks:
-      - app-network
+      - steeper-network
     deploy:
       resources:
         limits:
@@ -42,8 +42,8 @@ services:
           memory: 1G
 
   app:
-    container_name: template-app
-    image: template-app-image:latest
+    container_name: steeper-app
+    image: steeper-app-image:latest
     command: gunicorn -k uvicorn.workers.UvicornWorker -w 4 -b 0.0.0.0:${APP_BACKEND_PORT} --worker-connections 1000 --keep-alive 10 src.main.web:app
     restart: on-failure
     healthcheck:
@@ -61,7 +61,7 @@ services:
       app-builder:
         condition: service_completed_successfully
     networks:
-      - app-network
+      - steeper-network
     deploy:
       resources:
         limits:
@@ -69,8 +69,8 @@ services:
           memory: 2G
 
   celery_worker:
-    container_name: template-celery-worker
-    image: template-app-image:latest
+    container_name: steeper-celery-worker
+    image: steeper-app-image:latest
     env_file: ../.env
     command: python -m celery -A celery_tasks.main worker --pool=solo --loglevel=info -E
     restart: unless-stopped
@@ -85,7 +85,7 @@ services:
       app-builder:
         condition: service_completed_successfully
     networks:
-      - app-network
+      - steeper-network
     deploy:
       resources:
         limits:
@@ -93,8 +93,8 @@ services:
           memory: 1G
 
   celery_beat:
-    container_name: template-celery-beat
-    image: template-app-image:latest
+    container_name: steeper-celery-beat
+    image: steeper-app-image:latest
     env_file: ../.env
     command: python -m celery -A celery_tasks.main beat --loglevel=info
     restart: unless-stopped
@@ -109,7 +109,7 @@ services:
       app-builder:
         condition: service_completed_successfully
     networks:
-      - app-network
+      - steeper-network
     deploy:
       resources:
         limits:
@@ -118,8 +118,8 @@ services:
 
   # Flower for Celery monitoring
   flower:
-    container_name: template-flower
-    image: template-flower:latest
+    container_name: steeper-flower
+    image: steeper-flower:latest
     build:
       context: ..
       dockerfile: infra/docker/Dockerfile
@@ -139,7 +139,7 @@ services:
       celery_worker:
         condition: service_started
     networks:
-      - app-network
+      - steeper-network
     deploy:
       resources:
         limits:
@@ -147,7 +147,7 @@ services:
           memory: 512M
 
   nginx:
-    container_name: template-nginx
+    container_name: steeper-nginx
     image: nginx:latest
     restart: always
     volumes:
@@ -159,7 +159,7 @@ services:
       app:
         condition: service_healthy
     networks:
-      - app-network
+      - steeper-network
     deploy:
       resources:
         limits:
@@ -167,7 +167,7 @@ services:
           memory: 256M
 
   redis:
-    container_name: template-redis
+    container_name: steeper-redis
     image: 'redis:7.4'
     restart: unless-stopped
     env_file: ../.env
@@ -183,7 +183,7 @@ services:
       - ./redis.conf:/etc/redis/redis.conf:ro
       - redis-data:/data
     networks:
-      - app-network
+      - steeper-network
     deploy:
       resources:
         limits:
@@ -191,7 +191,7 @@ services:
           memory: 1G
 
   rabbitmq:
-    container_name: template-rabbitmq
+    container_name: steeper-rabbitmq
     image: rabbitmq:3.12-management
     restart: unless-stopped
     healthcheck:
@@ -207,7 +207,7 @@ services:
       - "${RABBITMQ_PORT}:5672"
       - "15672:15672"
     networks:
-      - app-network
+      - steeper-network
     deploy:
       resources:
         limits:
@@ -223,6 +223,6 @@ volumes:
     name: app-celery-state
 
 networks:
-  app-network:
-    name: app-network
+  steeper-network:
+    name: steeper-network
     driver: bridge

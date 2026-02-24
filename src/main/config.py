@@ -35,6 +35,15 @@ class BroadcastingConfig(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
 
+class MailjetConfig(BaseModel):
+    MAILJET_API_KEY: str
+    MAILJET_SECRET_KEY: str
+    MAILJET_SENDER_EMAIL: str
+    MAILJET_SENDER_NAME: str = "Steeper"
+
+    model_config = ConfigDict(extra="ignore")
+
+
 class RedisConfig(BaseModel):
     REDIS_HOST: str
     REDIS_PORT: int
@@ -176,6 +185,8 @@ class AppConfig(BaseModel):
     PING_INTERVAL: int
     CONNECTION_TTL: int
 
+    MAILER_BACKEND: str = "mailjet"  # "mailjet" | "smtp"
+
     model_config = ConfigDict(extra="ignore")
 
     @field_validator(
@@ -211,6 +222,7 @@ class Config(BaseModel):
     postgres: PostgresConfig
     rabbitmq: RabbitMQConfig
     broadcasting: BroadcastingConfig
+    mailjet: MailjetConfig
     administration: AdministrationConfig
 
     model_config = ConfigDict(extra="ignore")
@@ -244,6 +256,7 @@ def get_settings() -> Config:
         postgres=PostgresConfig(**merged_env),
         rabbitmq=RabbitMQConfig(**merged_env),
         broadcasting=BroadcastingConfig(**merged_env),
+        mailjet=MailjetConfig(**merged_env),
         administration=AdministrationConfig(**merged_env),
     )
 

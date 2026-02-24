@@ -1,20 +1,36 @@
-from src.workspace.dependencies import get_workspace_member_service
 from typing import Annotated
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.core.database.session import get_session
+from src.core.database.session import get_session, get_unit_of_work
+from src.core.database.uow.abstract import RepositoryProtocol
+from src.core.database.uow.application import ApplicationUnitOfWork
+from src.core.email_service.dependencies import get_email_service
+from src.core.email_service.service import EmailService
 from src.core.pagination import PaginatedResponse, PaginationParams
 from src.user.auth.dependencies import get_current_user
 from src.user.models import User
-from src.workspace.dependencies import get_workspace_service
-from src.workspace.schemas import WorkspaceCreateRequest, WorkspaceViewModel, WorkspaceMemberViewModel
+from src.workspace.dependencies import get_workspace_member_service
+from src.workspace.permissions.checker import require_workspace_permission
+from src.workspace.permissions.enum import WorkspacePermission
+from src.workspace.schemas import (
+    InviteMemberRequest,
+    InviteSuccessResponse,
+    MemberListItemViewModel,
+    WorkspaceCreateRequest,
+    WorkspaceMemberViewModel,
+    WorkspaceViewModel,
+)
 from src.workspace.services.workspace_member import WorkspaceMemberService
 from src.workspace.usecases.create_workspace import (
     CreateWorkspaceUseCase,
     get_create_workspace_use_case,
 )
+from src.workspace.usecases.invite_member import InviteMemberUseCase, get_invite_member_use_case
+from src.workspace.usecases.list_members import ListMembersUseCase, get_list_members_use_case
+from src.workspace.models import WorkspaceMember
 
 router = APIRouter()
 
@@ -53,5 +69,52 @@ async def get_workspaces(
     return await workspace_member_service.get_paginated_list(
         user_id=current_user.id,
         session=session,
+        pagination=pagination,
+    )
+
+
+@router.post(
+    "/invite",
+    status_code=status.HTTP_200_OK,
+)
+async def invite_member(
+    data: InviteMemberRequest,
+    current_member: Annotated[
+        WorkspaceMember,
+        Depends(require_workspace_permission(WorkspacePermission.INVITE_MEMBER)),
+    ],
+    use_case: Annotated[
+        InviteMemberUseCase, Depends(get_invite_member_use_case)
+    ],
+) -> InviteSuccessResponse:
+    """
+    Invite an existing user to the current workspace by email.
+    Requires the ``INVITE_MEMBER`` permission (OWNER only by default).
+    """
+    return await use_case.execute(
+        workspace_id=current_member.workspace_id,
+        data=data,
+    )
+
+
+@router.get(
+    "/members",
+    status_code=status.HTTP_200_OK,
+)
+async def list_members(
+    pagination: Annotated[PaginationParams, Depends()],
+    current_member: Annotated[
+        WorkspaceMember,
+        Depends(require_workspace_permission(WorkspacePermission.VIEW_MEMBERS)),
+    ],
+    use_case: Annotated[ListMembersUseCase, Depends(get_list_members_use_case)],
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> PaginatedResponse[MemberListItemViewModel]:
+    """
+    List all members of the current workspace.
+    Requires the ``VIEW_MEMBERS`` permission (OWNER and MEMBER).
+    """
+    return await use_case.execute(
+        workspace_id=current_member.workspace_id,
         pagination=pagination,
     )

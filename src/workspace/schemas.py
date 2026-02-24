@@ -61,3 +61,27 @@ class WorkspaceMemberViewModel(Base):
     workspace: WorkspaceViewModel
 
     created_at: datetime
+
+
+class MemberListItemViewModel(Base):
+    """Flat view model for the GET /workspaces/members list response."""
+
+    user_id: UUID
+    email: EmailStr
+    role: WorkspaceRole
+
+
+class InviteSuccessResponse(Base):
+    """Response returned by POST /workspaces/invite."""
+
+    success: bool = True
+
+
+class WorkspaceInviteEmailBody(Base):
+    """Template context for the workspace_invite.html email."""
+
+    title: str
+    name: str
+    workspace_name: str
+    role: str
+    link: str

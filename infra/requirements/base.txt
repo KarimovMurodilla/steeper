@@ -14,6 +14,7 @@ GeoAlchemy2
 gunicorn
 httpx
 loguru
+mailjet-rest
 passlib
 pydantic
 pydantic-settings
