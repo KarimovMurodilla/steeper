@@ -1,5 +1,3 @@
-from src.bot.services.bot import BotService
-from src.bot.repositories.bot import BotRepository
 from typing import Annotated
 from uuid import UUID
 
@@ -9,6 +7,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.bot.enums import BotRole
 from src.bot.models import Bot
 from src.bot.repositories.admin_bot_role import AdminBotRoleRepository
+from src.bot.repositories.bot import BotRepository
+from src.bot.services.bot import BotService
 from src.core.database.session import get_session
 from src.core.errors.exceptions import (
     AccessForbiddenException,

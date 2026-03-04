@@ -45,6 +45,12 @@ class LogBotMessageUseCase:
                 session=uow.session, tg_user_id=payload.chat_id, bot_id=bot.id
             )
 
+            if not tg_user:
+                logger.warning(
+                    "Webhook received for unknown Telegram user: %s", payload.chat_id
+                )
+                raise InstanceNotFoundException("Telegram user not found")
+
             chat = await uow.chats.get_single(
                 session=uow.session, bot_id=bot.id, telegram_user_id=tg_user.id
             )

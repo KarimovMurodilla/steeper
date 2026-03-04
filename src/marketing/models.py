@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Optional
+from typing import Any
 from uuid import UUID as PY_UUID
 
 from sqlalchemy import (
@@ -27,11 +27,13 @@ class Broadcast(Base, UUIDIDMixin, TimestampMixin, SoftDeleteMixin):
     created_by: Mapped[PY_UUID] = mapped_column(ForeignKey("users.id"), nullable=True)
 
     message_content: Mapped[str] = mapped_column(Text)
-    filters: Mapped[dict] = mapped_column(JSONB, default=dict)  # User filtering logic
+    filters: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, default=dict
+    )  # User filtering logic
     status: Mapped[BroadcastStatus] = mapped_column(
         SQLEnum(BroadcastStatus), default=BroadcastStatus.DRAFT
     )
-    scheduled_at: Mapped[Optional[datetime]] = mapped_column(default=None)
+    scheduled_at: Mapped[datetime | None] = mapped_column(default=None)
 
 
 class BroadcastDelivery(Base, UUID7IDMixin, TimestampMixin):

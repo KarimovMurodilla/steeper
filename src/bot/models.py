@@ -1,4 +1,4 @@
-from typing import TYPE_CHECKING, List
+from typing import TYPE_CHECKING
 from uuid import UUID as PY_UUID
 
 from sqlalchemy import (
@@ -7,7 +7,6 @@ from sqlalchemy import (
     String,
     UniqueConstraint,
 )
-from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.bot.enums import BotRole, BotStatus
@@ -37,11 +36,11 @@ class Bot(Base, UUIDIDMixin, TimestampMixin, SoftDeleteMixin):
 
     # Relationships
     workspace: Mapped["Workspace"] = relationship("Workspace", back_populates="bots")
-    telegram_users: Mapped[List["TelegramUser"]] = relationship(
+    telegram_users: Mapped[list["TelegramUser"]] = relationship(
         "TelegramUser", back_populates="bot"
     )
-    chats: Mapped[List["Chat"]] = relationship("Chat", back_populates="bot")
-    admin_roles: Mapped[List["AdminBotRole"]] = relationship(
+    chats: Mapped[list["Chat"]] = relationship("Chat", back_populates="bot")
+    admin_roles: Mapped[list["AdminBotRole"]] = relationship(
         "AdminBotRole", back_populates="bot"
     )
 

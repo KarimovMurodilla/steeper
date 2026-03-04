@@ -1,13 +1,16 @@
-from sqlalchemy.orm import selectinload
-from src.core.pagination import make_paginated_response
-from src.core.pagination import PaginatedResponse
-from typing import Any
-from sqlalchemy.orm import Load
-from src.core.pagination import PaginationParams
+from typing import Any, cast
+
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import Load, selectinload
+
 from src.bot.models import Bot
 from src.bot.repositories.bot import BotRepository
 from src.bot.schemas import BotCreateRequest, BotViewModel
+from src.core.pagination import (
+    PaginatedResponse,
+    PaginationParams,
+    make_paginated_response,
+)
 from src.core.schemas import Base
 from src.core.services import BaseService
 
@@ -19,8 +22,6 @@ class BotService(BaseService[Bot, BotCreateRequest, Base, BotRepository, BotView
     ):
         super().__init__(repository, response_schema=BotViewModel)
 
-    
-    # get paginated list related with admin bot role
     async def get_paginated_list(
         self,
         session: AsyncSession,
@@ -29,7 +30,7 @@ class BotService(BaseService[Bot, BotCreateRequest, Base, BotRepository, BotView
         **filters: Any,
     ) -> PaginatedResponse[BotViewModel]:
         """Retrieve a paginated list of records matching the filters."""
-        eager = [selectinload(Bot.admin_roles)]
+        eager = [cast(Load, selectinload(Bot.admin_roles))]
         items, total = await self.repository.get_paginated_list(
             session=session,
             page=pagination.page,

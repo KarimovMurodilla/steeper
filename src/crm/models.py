@@ -1,4 +1,4 @@
-from typing import TYPE_CHECKING, List, Optional
+from typing import TYPE_CHECKING
 from uuid import UUID as PY_UUID
 
 from sqlalchemy import BigInteger, ForeignKey, Index, String, UniqueConstraint
@@ -24,9 +24,9 @@ class TelegramUser(Base, UUIDIDMixin, TimestampMixin, SoftDeleteMixin):
     )  # Telegram ID > 2^32
     bot_id: Mapped[PY_UUID] = mapped_column(ForeignKey("bots.id"), nullable=False)
 
-    first_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
-    username: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
-    language_code: Mapped[Optional[str]] = mapped_column(String(10), nullable=True)
+    first_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    username: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    language_code: Mapped[str | None] = mapped_column(String(10), nullable=True)
 
     bot: Mapped["Bot"] = relationship("Bot", back_populates="telegram_users")
-    chats: Mapped[List["Chat"]] = relationship("Chat", back_populates="telegram_user")
+    chats: Mapped[list["Chat"]] = relationship("Chat", back_populates="telegram_user")

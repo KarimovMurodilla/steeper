@@ -1,10 +1,13 @@
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any, Generic, TypeVar
+from uuid import UUID
 
 from pydantic import ConfigDict, Field
 
 from src.communication.enums import MessageType, SenderType
 from src.core.schemas import Base
+
+T = TypeVar("T")
 
 
 class TgUser(Base):
@@ -15,9 +18,9 @@ class TgUser(Base):
     id: int
     is_bot: bool
     first_name: str
-    last_name: Optional[str] = None
-    username: Optional[str] = None
-    language_code: Optional[str] = None
+    last_name: str | None = None
+    username: str | None = None
+    language_code: str | None = None
 
 
 class TgChat(Base):
@@ -27,11 +30,11 @@ class TgChat(Base):
 
     id: int
     type: str
-    title: Optional[str] = None
-    username: Optional[str] = None
+    title: str | None = None
+    username: str | None = None
     # For private chats (type='private'), Telegram includes first_name/last_name in the chat object
-    first_name: Optional[str] = None
-    last_name: Optional[str] = None
+    first_name: str | None = None
+    last_name: str | None = None
 
 
 class TgMessage(Base):
@@ -40,17 +43,17 @@ class TgMessage(Base):
     model_config = ConfigDict(extra="ignore")
 
     message_id: int
-    from_user: Optional[TgUser] = Field(default=None, alias="from_user")
+    from_user: TgUser | None = Field(default=None, alias="from_user")
     chat: TgChat
     date: int
-    text: Optional[str] = None
-    caption: Optional[str] = None
+    text: str | None = None
+    caption: str | None = None
 
     # It is assumed that media fields are optional and can be ignored for now
-    photo: Optional[list[Any]] = None
-    document: Optional[Any] = None
-    video: Optional[Any] = None
-    voice: Optional[Any] = None
+    photo: list[Any] | None = None
+    document: Any | None = None
+    video: Any | None = None
+    voice: Any | None = None
 
 
 class TelegramUpdatePayload(Base):
@@ -62,8 +65,8 @@ class TelegramUpdatePayload(Base):
     model_config = ConfigDict(extra="ignore")
 
     update_id: int
-    message: Optional[TgMessage] = None
-    edited_message: Optional[TgMessage] = None
+    message: TgMessage | None = None
+    edited_message: TgMessage | None = None
     # callback_query, channel_post, etc. can be added here later
 
 
@@ -74,7 +77,7 @@ class MessageViewModel(Base):
     chat_id: str  # UUID
     sender_type: SenderType
     message_type: MessageType
-    content: Optional[str]
+    content: str | None
     created_at: datetime
 
 
@@ -85,3 +88,43 @@ class BotMessagePayload(Base):
     text: str
     message_id: int
     date: int
+
+
+class ChatListItemViewModel(Base):
+    """GET /bots/{bot_id}/chats list item."""
+
+    chat_id: UUID
+    telegram_id: int
+    first_name: str | None = None
+    username: str | None = None
+    last_message: str | None = None
+    updated_at: datetime
+
+
+class MessageListItemViewModel(Base):
+    """GET /chats/{chat_id}/messages list item."""
+
+    id: UUID
+    sender: SenderType
+    content: str | None
+    created_at: datetime
+
+
+class CursorPaginatedResponse(Base, Generic[T]):
+    """Generic cursor-paginated response."""
+
+    items: list[T]
+    next_cursor: str | None = None
+
+
+class SendMessageRequest(Base):
+    """POST /chats/{chat_id}/messages request body."""
+
+    text: str = Field(..., min_length=1, max_length=4096)
+
+
+class SendMessageResponse(Base):
+    """POST /chats/{chat_id}/messages response."""
+
+    telegram_message_id: int
+    status: str = "SENT"

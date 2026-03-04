@@ -1,3 +1,4 @@
+from typing import Any
 from uuid import UUID
 
 from sqlalchemy import func
@@ -15,7 +16,7 @@ class TelegramUserRepository(SoftDeleteRepository[TelegramUser]):
     model = TelegramUser
 
     async def upsert(
-        self, session: AsyncSession, bot_id: UUID, tg_data: dict
+        self, session: AsyncSession, bot_id: UUID, tg_data: dict[str, Any]
     ) -> TelegramUser:
         """
         Creates or updates a TelegramUser.

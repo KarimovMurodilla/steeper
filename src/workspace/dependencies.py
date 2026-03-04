@@ -1,4 +1,3 @@
-from src.workspace.services.workspace_member import WorkspaceMemberService
 from typing import Annotated
 from uuid import UUID
 
@@ -13,6 +12,7 @@ from src.workspace.models import WorkspaceMember
 from src.workspace.repositories.workspace import WorkspaceRepository
 from src.workspace.repositories.workspace_member import WorkspaceMemberRepository
 from src.workspace.services.workspace import WorkspaceService
+from src.workspace.services.workspace_member import WorkspaceMemberService
 
 
 async def get_current_workspace_id(

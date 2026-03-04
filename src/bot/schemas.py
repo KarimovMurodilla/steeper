@@ -1,17 +1,15 @@
 from datetime import datetime
-from typing import Any
 from uuid import UUID
 
 from pydantic import Field, field_validator
 
-from src.bot.enums import BotStatus, BotRole
+from src.bot.enums import BotRole, BotStatus
 from src.core.schemas import Base
 
 
 class BotCreateRequest(Base):
     """Schema for creating a new bot."""
 
-    name: str = Field(..., min_length=1, max_length=100)
     token: str = Field(..., min_length=10, description="Telegram Bot Token")
 
     @field_validator("token")
@@ -36,7 +34,6 @@ class BotViewModel(Base):
     id: UUID
     workspace_id: UUID
     name: str
-    admin_roles: list["AdminBotRoleViewModel"]
     status: BotStatus
     created_at: datetime
 
@@ -55,6 +52,8 @@ class AdminBotRoleViewModel(Base):
     role: BotRole
 
 
-class AdminBotRoleAssignModel(Base):
-    admin_id: UUID
-    role_name: str
+class AdminBotRoleAssignRequest(Base):
+    """Request body for POST /bots/{bot_id}/admins."""
+
+    user_id: UUID
+    role: BotRole

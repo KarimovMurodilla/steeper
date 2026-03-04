@@ -1,4 +1,4 @@
-from pydantic import EmailStr, Field, field_validator
+from pydantic import EmailStr, field_validator
 
 from src.core.schemas import (
     Base,
@@ -7,8 +7,6 @@ from src.core.schemas import (
 )
 from src.core.validations import (
     FULL_NAME_PATTERN,
-    PHONE_NUMBER_MIN_LENGTH,
-    PHONE_NUMBER_REGEX,
     USERNAME_VALIDATOR,
 )
 

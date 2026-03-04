@@ -1,4 +1,4 @@
-from typing import TYPE_CHECKING, List
+from typing import TYPE_CHECKING
 from uuid import UUID as PY_UUID
 
 from sqlalchemy import (
@@ -30,7 +30,7 @@ class Workspace(Base, UUIDIDMixin, TimestampMixin, SoftDeleteMixin):
     members: Mapped[list["WorkspaceMember"]] = relationship(
         "WorkspaceMember", back_populates="workspace"
     )
-    bots: Mapped[List["Bot"]] = relationship("Bot", back_populates="workspace")
+    bots: Mapped[list["Bot"]] = relationship("Bot", back_populates="workspace")
 
 
 class WorkspaceMember(Base, UUIDIDMixin, TimestampMixin, SoftDeleteMixin):

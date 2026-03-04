@@ -211,6 +211,12 @@ class AppConfig(BaseModel):
         return [item.strip() for item in v.split(sep) if item.strip()]
 
 
+class TelegramConfig(BaseModel):
+    TELEGRAM_API_BASE: str
+
+    model_config = ConfigDict(extra="ignore")
+
+
 class Config(BaseModel):
     _project_root: Path | None = None
 
@@ -224,6 +230,7 @@ class Config(BaseModel):
     broadcasting: BroadcastingConfig
     mailjet: MailjetConfig
     administration: AdministrationConfig
+    telegram: TelegramConfig
 
     model_config = ConfigDict(extra="ignore")
 
@@ -258,6 +265,7 @@ def get_settings() -> Config:
         broadcasting=BroadcastingConfig(**merged_env),
         mailjet=MailjetConfig(**merged_env),
         administration=AdministrationConfig(**merged_env),
+        telegram=TelegramConfig(**merged_env),
     )
 
 

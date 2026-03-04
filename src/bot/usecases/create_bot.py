@@ -1,19 +1,19 @@
-from src.bot.enums import BotRole
 from uuid import UUID
 
 from fastapi import Depends
 
 from loggers import get_logger
+from src.bot.enums import BotRole
 from src.bot.schemas import BotCreateRequest, BotViewModel
 from src.bot.services.telegram_api import TelegramAPIService
 from src.core.database.session import get_unit_of_work
 from src.core.database.uow import ApplicationUnitOfWork, RepositoryProtocol
 from src.core.errors.exceptions import (
     AccessForbiddenException,
+    CoreException,
 )
 from src.core.utils.encryption import encrypt_token
 from src.core.utils.security import hash_token
-from src.core.errors.exceptions import CoreException
 
 logger = get_logger(__name__)
 
@@ -48,9 +48,12 @@ class CreateBotUseCase:
             token_hash = hash_token(data.token)
             token_encrypted = encrypt_token(data.token)
 
+            profile_photos = bot_info.get_profile_photos(1, 1)
+            logger.info(f"{profile_photos}")
+
             bot_data = {
                 "workspace_id": workspace_id,
-                "name": data.name,
+                "name": bot_info.first_name,
                 "token_hash": token_hash,
                 "token_encrypted": token_encrypted,
                 "username": bot_info.username,
@@ -60,13 +63,14 @@ class CreateBotUseCase:
 
             await uow.session.flush()
 
-            await uow.admin_bot_roles.create(uow.session, {
-                "admin_id": user_id,
-                "bot_id": new_bot.id,
-                "role": BotRole.ADMIN,
-            })
-            # Eagerly load the relationship while the session/transaction is still open.
-            # Accessing it after commit raises "Can't operate on closed transaction".
+            await uow.admin_bot_roles.create(
+                uow.session,
+                {
+                    "admin_id": user_id,
+                    "bot_id": new_bot.id,
+                    "role": BotRole.ADMIN,
+                },
+            )
             await uow.session.refresh(new_bot, ["admin_roles"])
 
             result = BotViewModel.model_validate(new_bot)

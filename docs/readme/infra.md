@@ -21,7 +21,7 @@ Configs live in `infra/` (compose, nginx, dockerfiles, redis/postgres, requireme
 - **RabbitMQ:** Broker with management UI.
 
 ## Prerequisites
-- Python 3.13 (for local scripts/hooks)
+- Python 3.12 (for local scripts/hooks)
 - Docker
 - Docker Compose
 

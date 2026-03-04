@@ -1,4 +1,4 @@
-from typing import TYPE_CHECKING, List, Optional
+from typing import TYPE_CHECKING, Any
 from uuid import UUID as PY_UUID
 
 from sqlalchemy import (
@@ -39,7 +39,7 @@ class Chat(Base, UUIDIDMixin, TimestampMixin, SoftDeleteMixin):
     telegram_user: Mapped["TelegramUser"] = relationship(
         "TelegramUser", back_populates="chats"
     )
-    messages: Mapped[List["Message"]] = relationship("Message", back_populates="chat")
+    messages: Mapped[list["Message"]] = relationship("Message", back_populates="chat")
 
 
 class Message(Base, UUID7IDMixin, TimestampMixin):
@@ -49,9 +49,9 @@ class Message(Base, UUID7IDMixin, TimestampMixin):
     sender_type: Mapped[SenderType] = mapped_column(SQLEnum(SenderType))
     message_type: Mapped[MessageType] = mapped_column(SQLEnum(MessageType))
 
-    tg_message_id: Mapped[Optional[int]] = mapped_column(nullable=True)
-    content: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    metadata_info: Mapped[dict] = mapped_column(
+    tg_message_id: Mapped[int | None] = mapped_column(nullable=True)
+    content: Mapped[str | None] = mapped_column(Text, nullable=True)
+    metadata_info: Mapped[dict[str, Any]] = mapped_column(
         JSONB, default=dict
     )  # For media_id, caption and etc.
 

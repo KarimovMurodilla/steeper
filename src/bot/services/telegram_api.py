@@ -1,4 +1,4 @@
-from typing import Any, Optional
+from typing import Any, cast
 
 from aiogram import Bot
 from aiogram.client.default import DefaultBotProperties
@@ -39,7 +39,7 @@ class TelegramAPIService:
         except Exception as e:
             logger.warning("Error closing bot session: %s", e)
 
-    async def get_me(self, token: str) -> Optional[User]:
+    async def get_me(self, token: str) -> User | None:
         """
         Validates the token and returns basic bot information.
         Useful for the initial setup of the bot.
@@ -111,9 +111,9 @@ class TelegramAPIService:
         token: str,
         chat_id: int | str,
         text: str,
-        reply_to_message_id: Optional[int] = None,
+        reply_to_message_id: int | None = None,
         disable_link_preview: bool = False,
-    ) -> Optional[dict[str, Any]]:
+    ) -> dict[str, Any] | None:
         """
         Sends a text message to a specific chat.
 
@@ -139,7 +139,8 @@ class TelegramAPIService:
                 reply_to_message_id=reply_to_message_id,
                 link_preview_options=link_preview,
             )
-            return message.model_dump()
+            message_dict = message.model_dump()
+            return cast(dict[str, Any], message_dict)
         except TelegramAPIError as e:
             logger.error("Failed to send message to chat %s: %s", chat_id, e)
             return None

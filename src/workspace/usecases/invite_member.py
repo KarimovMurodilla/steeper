@@ -1,4 +1,5 @@
 """Use case: invite a user to a workspace by email."""
+
 from uuid import UUID
 
 from fastapi import Depends
@@ -8,13 +9,16 @@ from src.core.database.session import get_unit_of_work
 from src.core.database.uow.abstract import RepositoryProtocol
 from src.core.database.uow.application import ApplicationUnitOfWork
 from src.core.email_service.dependencies import get_email_service
-from src.workspace.schemas import WorkspaceInviteEmailBody
 from src.core.email_service.service import EmailService
 from src.core.errors.exceptions import (
     InstanceAlreadyExistsException,
     InstanceNotFoundException,
 )
-from src.workspace.schemas import InviteMemberRequest, InviteSuccessResponse
+from src.workspace.schemas import (
+    InviteMemberRequest,
+    InviteSuccessResponse,
+    WorkspaceInviteEmailBody,
+)
 
 logger = get_logger(__name__)
 
@@ -63,9 +67,7 @@ class InviteMemberUseCase:
                 )
 
             # 3. Persist membership
-            workspace = await uow.workspaces.get_single(
-                uow.session, id=workspace_id
-            )
+            workspace = await uow.workspaces.get_single(uow.session, id=workspace_id)
 
             await uow.workspace_members.create(
                 uow.session,
@@ -88,7 +90,7 @@ class InviteMemberUseCase:
                     title="Workspace Invitation",
                     name=user.full_name,
                     workspace_name=workspace_name,
-                    role=data.role.value.capitalize(),
+                    role=data.role.capitalize(),
                     link="",  # TODO: replace with actual accept-invite deep-link
                 ),
             )

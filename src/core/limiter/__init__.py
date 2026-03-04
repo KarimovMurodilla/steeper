@@ -62,8 +62,9 @@ class FastAPILimiter:
         redis_client: aredis.Redis | str,
         prefix: str | None = None,
         identifier: Callable[[Request], Awaitable[str]] | None = None,
-        http_callback: None
-        | (Callable[[Request, Response, int], Awaitable[None]]) = None,
+        http_callback: None | (
+            Callable[[Request, Response, int], Awaitable[None]]
+        ) = None,
     ) -> None:
         """
         Initializes a Redis client, identifier and callback.
@@ -73,8 +74,7 @@ class FastAPILimiter:
 
         redis_instance: aredis.Redis
         if isinstance(redis_client, str):
-            # Type ignored since the function is known to return Redis despite missing type stub
-            redis_instance = aredis.from_url(redis_client)  # type: ignore
+            redis_instance = aredis.from_url(redis_client)
         else:
             redis_instance = redis_client
 

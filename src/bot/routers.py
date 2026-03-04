@@ -1,22 +1,34 @@
-from src.core.pagination import PaginatedResponse
-from src.core.pagination import PaginationParams
-from src.core.database.session import get_session
-from sqlalchemy.ext.asyncio import AsyncSession
-from src.bot.services.bot import BotService
 from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, status
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.bot.schemas import BotCreateRequest, BotViewModel
+from src.bot.dependencies import get_bot_service
+from src.bot.enums import BotRole
+from src.bot.permissions.checker import require_bot_permission
+from src.bot.permissions.enum import BotPermission
+from src.bot.schemas import (
+    AdminBotRoleAssignRequest,
+    AdminBotRoleViewModel,
+    BotCreateRequest,
+    BotViewModel,
+)
+from src.bot.services.bot import BotService
+from src.bot.usecases.assign_bot_admin import (
+    AssignBotAdminUseCase,
+    get_assign_bot_admin_use_case,
+)
 from src.bot.usecases.create_bot import (
     CreateBotUseCase,
     get_create_bot_use_case,
 )
-from src.bot.dependencies import get_bot_service
+from src.core.database.session import get_session
+from src.core.pagination import PaginatedResponse, PaginationParams
 from src.user.auth.dependencies import get_current_user
 from src.user.models import User
 from src.workspace.dependencies import get_current_workspace_id
+from src.workspace.models import WorkspaceMember
 from src.workspace.permissions.checker import require_workspace_permission
 from src.workspace.permissions.enum import WorkspacePermission
 
@@ -33,7 +45,10 @@ async def create_bot(
     current_user: Annotated[User, Depends(get_current_user)],
     workspace_id: Annotated[UUID, Depends(get_current_workspace_id)],
     use_case: Annotated[CreateBotUseCase, Depends(get_create_bot_use_case)],
-    _=Depends(require_workspace_permission(WorkspacePermission.CREATE_BOT)),
+    _: Annotated[
+        WorkspaceMember,
+        Depends(require_workspace_permission(WorkspacePermission.CREATE_BOT)),
+    ],
 ) -> BotViewModel:
     """
     Creates a new bot in the current user's workspace.
@@ -56,15 +71,38 @@ async def get_bots(
     workspace_id: Annotated[UUID, Depends(get_current_workspace_id)],
     pagination: Annotated[PaginationParams, Depends()],
     session: Annotated[AsyncSession, Depends(get_session)],
-    service: Annotated[BotService, Depends(get_bot_service)],
-    _=Depends(require_workspace_permission(WorkspacePermission.VIEW_DASHBOARD)),
+    bot_service: Annotated[BotService, Depends(get_bot_service)],
+    _: Annotated[
+        WorkspaceMember,
+        Depends(require_workspace_permission(WorkspacePermission.VIEW_DASHBOARD)),
+    ],
 ) -> PaginatedResponse[BotViewModel]:
     """
     Gets all bots in the current user's workspace.
     Requires VIEW_DASHBOARD permission.
     """
-    return await service.get_paginated_list(
-        session=session,
-        pagination=pagination,
-        workspace_id=workspace_id
+    return await bot_service.get_paginated_list(
+        session=session, pagination=pagination, workspace_id=workspace_id
     )
+
+
+@router.post(
+    "/{bot_id}/admins",
+    response_model=AdminBotRoleViewModel,
+    status_code=status.HTTP_201_CREATED,
+)
+async def assign_bot_admin(
+    bot_id: UUID,
+    workspace_id: Annotated[UUID, Depends(get_current_workspace_id)],
+    data: AdminBotRoleAssignRequest,
+    use_case: Annotated[AssignBotAdminUseCase, Depends(get_assign_bot_admin_use_case)],
+    _: Annotated[
+        BotRole,
+        Depends(require_bot_permission(BotPermission.MANAGE_ROLES)),
+    ],
+) -> AdminBotRoleViewModel:
+    """
+    Assign a bot-level admin role to a user.
+    Requires MANAGE_ROLES bot permission (ADMIN only).
+    """
+    return await use_case.execute(bot_id=bot_id, workspace_id=workspace_id, data=data)

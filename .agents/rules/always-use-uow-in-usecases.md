@@ -5,13 +5,13 @@ trigger: always_on
 # Rule: Use-Case Unit of Work & DI Factory Pattern
 
 ## Description
-When creating or modifying business logic layer components (Use Cases) that interact with the database, you must **always** use the `ApplicationUnitOfWork` injected via a Dependency Injection (DI) factory function. 
+When creating or modifying business logic layer components (Use Cases) that interact with the database, you must **always** use the `ApplicationUnitOfWork` injected via a Dependency Injection (DI) factory function.
 
 ## Directives
 1. **Injection**: Inject `uow: ApplicationUnitOfWork[RepositoryProtocol]` into the Use Case's `__init__` method. Never instantiate the UoW directly inside the class.
 2. **Transaction Management**: Inside the `execute` method, always wrap database operations within an `async with self.uow as uow:` context manager.
 3. **Repository Access**: Access repositories exclusively through the `uow` object and pass `uow.session` to repository methods (e.g., `uow.workspaces.create(uow.session, ...)`).
-4. **Flushing & Committing**: 
+4. **Flushing & Committing**:
    - Use `await uow.session.flush()` if you need to access auto-generated IDs before the transaction completes.
    - Always call `await uow.commit()` explicitly at the successful end of the operations block.
 5. **DI Factory**: Always create a companion factory function named `get_<usecase_name>_use_case` using FastAPI's `Depends` to inject `get_unit_of_work` and return an instance of the Use Case.
@@ -49,7 +49,7 @@ class CreateWorkspaceUseCase:
 
             # 4. Commit the transaction
             await uow.commit()
-            
+
             return WorkspaceViewModel.model_validate(workspace)
 
 # Dependency factory

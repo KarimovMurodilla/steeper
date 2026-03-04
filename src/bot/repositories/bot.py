@@ -1,5 +1,3 @@
-from typing import Optional
-
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -15,7 +13,7 @@ class BotRepository(SoftDeleteRepository[Bot]):
 
     async def get_by_token_hash(
         self, session: AsyncSession, token_hash: str
-    ) -> Optional[Bot]:
+    ) -> Bot | None:
         """Find a bot by its token hash (useful for webhooks)."""
         stmt = select(self.model).where(self.model.token_hash == token_hash)
         result = await session.execute(stmt)

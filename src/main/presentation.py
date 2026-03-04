@@ -4,6 +4,7 @@ from pydantic import ValidationError
 
 from src.bot import routers as bot_routers
 from src.communication import routers as communication_routers
+from src.communication.chat import routers as chat_routers
 from src.core.errors.exceptions import (
     AccessForbiddenException,
     CoreException,
@@ -55,6 +56,7 @@ def include_routers(app: FastAPI) -> None:
         communication_routers.router, prefix="/communications", tags=["Communications"]
     )
     v1_router.include_router(bot_routers.router, prefix="/bots", tags=["Bots"])
+    v1_router.include_router(chat_routers.router, prefix="/bots", tags=["Chats"])
     v1_router.include_router(
         workspace_routers.router, prefix="/workspaces", tags=["Workspaces"]
     )

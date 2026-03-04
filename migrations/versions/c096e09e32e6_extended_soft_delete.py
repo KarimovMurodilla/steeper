@@ -6,18 +6,16 @@ Create Date: 2026-01-18 10:53:08.579055
 
 """
 
-from typing import Sequence, Union
+from collections.abc import Sequence
 
 from alembic import op
 import sqlalchemy as sa
-import geoalchemy2
-
 
 # revision identifiers, used by Alembic.
 revision: str = "c096e09e32e6"
-down_revision: Union[str, None] = "9a0e3f8c57e6"
-branch_labels: Union[str, Sequence[str], None] = None
-depends_on: Union[str, Sequence[str], None] = None
+down_revision: str | None = "9a0e3f8c57e6"
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
@@ -40,9 +38,7 @@ def upgrade() -> None:
         "workspaces",
         sa.Column("deleted_at", sa.DateTime(timezone=True), nullable=True),
     )
-    op.add_column(
-        "workspaces", sa.Column("is_deleted", sa.Boolean(), nullable=False)
-    )
+    op.add_column("workspaces", sa.Column("is_deleted", sa.Boolean(), nullable=False))
     op.create_index(
         op.f("ix_workspaces_is_deleted"),
         "workspaces",

@@ -16,6 +16,7 @@ class UserProfileViewModel(Base):
 
 class UserSummaryViewModel(Base):
     id: UUID
+    email: EmailStr
     first_name: str
     last_name: str
     username: str

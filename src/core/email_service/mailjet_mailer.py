@@ -1,4 +1,5 @@
 """Mailjet email adapter implementing the AbstractMailer port."""
+
 from pathlib import Path
 from typing import Any
 

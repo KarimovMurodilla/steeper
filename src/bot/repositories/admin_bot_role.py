@@ -1,4 +1,3 @@
-from typing import Optional
 from uuid import UUID
 
 from sqlalchemy import select
@@ -17,7 +16,7 @@ class AdminBotRoleRepository(BaseRepository[AdminBotRole]):
 
     async def get_role(
         self, session: AsyncSession, admin_id: UUID, bot_id: UUID
-    ) -> Optional[BotRole]:
+    ) -> BotRole | None:
         """Fetch the explicit role of an admin in a specific bot."""
         stmt = select(self.model.role).where(
             self.model.admin_id == admin_id, self.model.bot_id == bot_id

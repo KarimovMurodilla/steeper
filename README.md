@@ -17,7 +17,7 @@ Production-ready FastAPI template with modular architecture, async stack, Celery
 - Tooling: pre-commit/ruff/black/mypy, pytest (asyncio), Alembic migrations.
 
 ## Quick Start
-- Install Docker and Docker Compose, Python 3.13 (for local scripts/hooks).
+- Install Docker and Docker Compose, Python 3.12 (for local scripts/hooks).
 - Copy env: `cp .env.example .env` and fill required values. For tests you can also use `.env.test` (picked up when `TESTING=true` in env).
 - Dev with reload: `make run-dev` (Nginx on 8000, app on 8001).
 - Prod-like: `make run`.
