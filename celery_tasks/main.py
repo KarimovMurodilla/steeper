@@ -33,6 +33,7 @@ celery_app.conf.update(
     include=[
         "src.user.tasks",
         "src.core.email_service.tasks",
+        "src.marketing.tasks",
     ],
     timezone="UTC",
     enable_utc=True,

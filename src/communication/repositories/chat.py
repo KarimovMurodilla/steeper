@@ -61,6 +61,15 @@ class ChatRepository(SoftDeleteRepository[Chat]):
 
         return items, total
 
+    async def count_by_bot(self, session: AsyncSession, bot_id: UUID) -> int:
+        """Total non-deleted chats for a bot."""
+        stmt = (
+            select(func.count())
+            .select_from(self.model)
+            .where(self.model.bot_id == bot_id, self.model.is_deleted == False)  # noqa: E712
+        )
+        return int((await session.execute(stmt)).scalar_one())
+
     async def get_last_message_content(
         self, session: AsyncSession, chat_id: UUID
     ) -> str | None:

@@ -11,6 +11,12 @@ class CeleryTask(Protocol):
 
     def __call__(self, *args: Any, **kwargs: Any) -> Any: ...
     def delay(self, *args: Any, **kwargs: Any) -> Any: ...
+    def apply_async(
+        self,
+        args: tuple[Any, ...] | list[Any] | None = None,
+        kwargs: dict[str, Any] | None = None,
+        **options: Any,
+    ) -> Any: ...
 
 
 F = TypeVar("F", bound=Callable[..., Any])

@@ -2,6 +2,8 @@ from fastapi import APIRouter, FastAPI
 from fastapi.exceptions import RequestValidationError
 from pydantic import ValidationError
 
+from src.analytics.routers.analytics import router as analytics_router
+from src.analytics.routers.audit import router as analytics_audit_router
 from src.bot import routers as bot_routers
 from src.communication import routers as communication_routers
 from src.communication.chat import routers as chat_routers
@@ -32,6 +34,7 @@ from src.core.errors.handlers import (
     ValidationErrorExceptionHandler,
     as_exception_handler,
 )
+from src.marketing import routers as marketing_routers
 from src.system import routers as system_routers
 
 # Import routers here
@@ -56,9 +59,20 @@ def include_routers(app: FastAPI) -> None:
         communication_routers.router, prefix="/communications", tags=["Communications"]
     )
     v1_router.include_router(bot_routers.router, prefix="/bots", tags=["Bots"])
-    v1_router.include_router(chat_routers.router, prefix="/bots", tags=["Chats"])
+    v1_router.include_router(
+        chat_routers.router, prefix="/bots", tags=["Chats"]
+    )
+    v1_router.include_router(
+        analytics_router, prefix="/bots", tags=["Analytics"]
+    )
+    v1_router.include_router(
+        analytics_audit_router, prefix="/audit-logs", tags=["Audit Logs"]
+    )
     v1_router.include_router(
         workspace_routers.router, prefix="/workspaces", tags=["Workspaces"]
+    )
+    v1_router.include_router(
+        marketing_routers.router, prefix="/broadcasts", tags=["Broadcasts"]
     )
 
     app.include_router(v1_router, prefix="/v1")

@@ -1,10 +1,11 @@
+from datetime import date
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from loggers import get_logger
-from src.communication.models import Message
+from src.communication.models import Chat, Message
 from src.core.database.repositories import BaseRepository
 
 logger = get_logger(__name__)
@@ -34,3 +35,30 @@ class MessageRepository(BaseRepository[Message]):
 
         result = await session.execute(stmt)
         return list(result.scalars().all())
+
+    async def count_by_bot(self, session: AsyncSession, bot_id: UUID) -> int:
+        """Total messages across all chats for a bot."""
+        stmt = (
+            select(func.count())
+            .select_from(self.model)
+            .join(Chat, Chat.id == self.model.chat_id)
+            .where(Chat.bot_id == bot_id)
+        )
+        return int((await session.execute(stmt)).scalar_one())
+
+    async def count_dau_by_bot(self, session: AsyncSession, bot_id: UUID) -> int:
+        """
+        Daily Active Users: distinct telegram users that had activity
+        (at least one message in any chat for this bot) today (UTC).
+        """
+        today_start = date.today()
+        stmt = (
+            select(func.count(func.distinct(Chat.telegram_user_id)))
+            .select_from(self.model)
+            .join(Chat, Chat.id == self.model.chat_id)
+            .where(
+                Chat.bot_id == bot_id,
+                func.date(self.model.created_at) == today_start,
+            )
+        )
+        return int((await session.execute(stmt)).scalar_one())

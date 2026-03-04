@@ -1,3 +1,5 @@
+from sqlalchemy import func
+from sqlalchemy import DateTime
 from datetime import datetime
 from typing import Any
 from uuid import UUID as PY_UUID
@@ -29,11 +31,13 @@ class Broadcast(Base, UUIDIDMixin, TimestampMixin, SoftDeleteMixin):
     message_content: Mapped[str] = mapped_column(Text)
     filters: Mapped[dict[str, Any]] = mapped_column(
         JSONB, default=dict
-    )  # User filtering logic
+    )
     status: Mapped[BroadcastStatus] = mapped_column(
         SQLEnum(BroadcastStatus), default=BroadcastStatus.DRAFT
     )
-    scheduled_at: Mapped[datetime | None] = mapped_column(default=None)
+    scheduled_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), default=func.now()
+    )
 
 
 class BroadcastDelivery(Base, UUID7IDMixin, TimestampMixin):

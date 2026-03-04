@@ -1,5 +1,7 @@
+from datetime import datetime
 from typing import Any
 from uuid import UUID
+
 
 from pydantic import Field, field_validator
 
@@ -45,3 +47,20 @@ class CreateAuditLogModel(AuditLogSchemaBase):
 
 class AuditLogViewModel(IDSchema, TimestampSchema, AuditLogSchemaBase):
     pass
+
+
+class BotAnalyticsSummary(Base):
+    """Response for GET /bots/{bot_id}/analytics/summary."""
+
+    users: int = Field(..., description="Total unique Telegram users of this bot")
+    chats: int = Field(..., description="Total chat sessions")
+    messages: int = Field(..., description="Total messages in all chats")
+    dau: int = Field(..., description="Daily active users (sent/received a message today)")
+
+
+class AuditLogListItemViewModel(Base):
+    """Single item in GET /audit-logs response."""
+
+    actor: str = Field(..., description="Email of the admin who performed the action")
+    action: str = Field(..., description="Action type (e.g. SEND_MESSAGE)")
+    created_at: datetime
