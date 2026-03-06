@@ -9,15 +9,14 @@ from src.core.errors.exceptions import (
 )
 from src.user.auth.schemas import (
     TelegramAuthRequest,
-    TelegramLoginWidgetSchema,
     TelegramAuthSource,
+    TelegramLoginWidgetSchema,
 )
-from src.user.auth.usecases.telegram_auth import TelegramAuthUseCase
-from src.user.models import User
-
+from src.user.auth.strategies.telegram.dto import TelegramUserData
 from src.user.auth.strategies.telegram.webapp import WebAppAuthStrategy
 from src.user.auth.strategies.telegram.widget import LoginWidgetAuthStrategy
-from src.user.auth.strategies.telegram.dto import TelegramUserData
+from src.user.auth.usecases.telegram_auth import TelegramAuthUseCase
+from src.user.models import User
 
 
 @pytest.fixture
@@ -48,16 +47,20 @@ async def test_telegram_auth_webapp_success(
     uow_mock.users.get_single.return_value = mock_user
 
     webapp_strategy = WebAppAuthStrategy()
-    webapp_strategy.verify = MagicMock(return_value=TelegramUserData(
-        telegram_id=telegram_id,
-        first_name="Test",
-        last_name=None,
-        username="test_user",
-        photo_url=None,
-        language_code=None
-    ))
+    webapp_strategy.verify = MagicMock(
+        return_value=TelegramUserData(
+            telegram_id=telegram_id,
+            first_name="Test",
+            last_name=None,
+            username="test_user",
+            photo_url=None,
+            language_code=None,
+        )
+    )
 
-    use_case = TelegramAuthUseCase(uow_mock, redis_mock, {TelegramAuthSource.WEBAPP: webapp_strategy})
+    use_case = TelegramAuthUseCase(
+        uow_mock, redis_mock, {TelegramAuthSource.WEBAPP: webapp_strategy}
+    )
 
     req = TelegramAuthRequest(source=TelegramAuthSource.WEBAPP, init_data="mock_data")
     result = await use_case.execute(req)
@@ -78,22 +81,26 @@ async def test_telegram_auth_widget_no_workspace(
     uow_mock.workspace_members.exists.return_value = False
 
     widget_strategy = LoginWidgetAuthStrategy()
-    widget_strategy.verify = MagicMock(return_value=TelegramUserData(
-        telegram_id=telegram_id,
-        first_name="Test",
-        last_name=None,
-        username="test_user",
-        photo_url=None,
-        language_code=None
-    ))
+    widget_strategy.verify = MagicMock(
+        return_value=TelegramUserData(
+            telegram_id=telegram_id,
+            first_name="Test",
+            last_name=None,
+            username="test_user",
+            photo_url=None,
+            language_code=None,
+        )
+    )
 
-    use_case = TelegramAuthUseCase(uow_mock, redis_mock, {TelegramAuthSource.LOGIN_WIDGET: widget_strategy})
+    use_case = TelegramAuthUseCase(
+        uow_mock, redis_mock, {TelegramAuthSource.LOGIN_WIDGET: widget_strategy}
+    )
 
     req = TelegramAuthRequest(
         source=TelegramAuthSource.LOGIN_WIDGET,
         telegram_login=TelegramLoginWidgetSchema(
             id=telegram_id, first_name="Test", auth_date=123, hash="fake"
-        )
+        ),
     )
 
     with pytest.raises(PermissionDeniedException) as exc:
@@ -113,22 +120,26 @@ async def test_telegram_auth_widget_success(
     uow_mock.workspace_members.exists.return_value = True
 
     widget_strategy = LoginWidgetAuthStrategy()
-    widget_strategy.verify = MagicMock(return_value=TelegramUserData(
-        telegram_id=telegram_id,
-        first_name="Test",
-        last_name=None,
-        username="test_user",
-        photo_url=None,
-        language_code=None
-    ))
+    widget_strategy.verify = MagicMock(
+        return_value=TelegramUserData(
+            telegram_id=telegram_id,
+            first_name="Test",
+            last_name=None,
+            username="test_user",
+            photo_url=None,
+            language_code=None,
+        )
+    )
 
-    use_case = TelegramAuthUseCase(uow_mock, redis_mock, {TelegramAuthSource.LOGIN_WIDGET: widget_strategy})
+    use_case = TelegramAuthUseCase(
+        uow_mock, redis_mock, {TelegramAuthSource.LOGIN_WIDGET: widget_strategy}
+    )
 
     req = TelegramAuthRequest(
         source=TelegramAuthSource.LOGIN_WIDGET,
         telegram_login=TelegramLoginWidgetSchema(
             id=telegram_id, first_name="Test", auth_date=123, hash="fake"
-        )
+        ),
     )
 
     result = await use_case.execute(req)
@@ -144,7 +155,9 @@ async def test_telegram_auth_invalid_signature(
     redis_mock: AsyncMock,
 ) -> None:
     webapp_strategy = WebAppAuthStrategy()
-    use_case = TelegramAuthUseCase(uow_mock, redis_mock, {TelegramAuthSource.WEBAPP: webapp_strategy})
+    use_case = TelegramAuthUseCase(
+        uow_mock, redis_mock, {TelegramAuthSource.WEBAPP: webapp_strategy}
+    )
 
     req = TelegramAuthRequest(source=TelegramAuthSource.WEBAPP, init_data="wrong_data")
 

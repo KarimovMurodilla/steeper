@@ -5,11 +5,11 @@ from uuid import UUID
 import sentry_sdk
 
 from loggers import get_logger
-from src.bot.services.telegram_api import TelegramAPIService
 from src.communication.enums import ChatStatus, MessageType, SenderType
 from src.core.database.uow import ApplicationUnitOfWork, RepositoryProtocol
 from src.core.utils.datetime_utils import get_utc_now
 from src.core.utils.encryption import decrypt_token
+from src.integrations.telegram.bot.telegram_bot_api import TelegramBotAPIService
 from src.marketing.enums import BroadcastStatus, DeliveryStatus
 
 logger = get_logger(__name__)
@@ -25,7 +25,7 @@ class ProcessBroadcastUseCase:
     def __init__(
         self,
         uow: ApplicationUnitOfWork[RepositoryProtocol],
-        tg_service: TelegramAPIService,
+        tg_service: TelegramBotAPIService,
     ) -> None:
         self.uow = uow
         self.tg_service = tg_service

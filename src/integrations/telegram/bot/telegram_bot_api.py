@@ -11,7 +11,7 @@ from loggers import get_logger
 logger = get_logger(__name__)
 
 
-class TelegramAPIService:
+class TelegramBotAPIService:
     """
     Infrastructure Service for interacting with the Telegram Bot API.
     Uses 'aiogram' v3 library under the hood.
@@ -63,7 +63,9 @@ class TelegramAPIService:
         finally:
             await self._close_bot_session(bot)
 
-    async def get_profile_photos(self, token: str, user_id: int, offset: int = 0, limit: int = 10) -> dict[str, Any] | None:
+    async def get_profile_photos(
+        self, token: str, user_id: int, offset: int = 0, limit: int = 10
+    ) -> dict[str, Any] | None:
         """
         Retrieves the profile photos of a Telegram user.
 
@@ -78,9 +80,11 @@ class TelegramAPIService:
         """
         bot = await self._get_bot_instance(token)
         try:
-            photos = await bot.get_user_profile_photos(user_id=user_id, offset=offset, limit=limit)
+            photos = await bot.get_user_profile_photos(
+                user_id=user_id, offset=offset, limit=limit
+            )
             photos_dict = photos.model_dump()
-            return photos_dict
+            return cast(dict[str, Any], photos_dict)
         except TelegramAPIError as e:
             logger.error("Failed to get profile photos for user %s: %s", user_id, e)
             return None

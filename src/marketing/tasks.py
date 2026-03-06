@@ -9,9 +9,9 @@ from celery_tasks.main import (
 )
 from celery_tasks.types import typed_shared_task
 from loggers import get_logger
-from src.bot.services.telegram_api import TelegramAPIService
 from src.core.database.uow import get_uow
 from src.core.utils.coroutine_runner import execute_coroutine_sync
+from src.integrations.telegram.dependencies import get_telegram_bot_api_service
 from src.marketing.usecases.process_broadcast import ProcessBroadcastUseCase
 
 logger = get_logger(__name__)
@@ -27,7 +27,7 @@ async def _process_broadcast(broadcast_id: str) -> str:
     try:
         async with local_async_session() as session:
             uow = await get_uow(session)
-            tg_service = TelegramAPIService()
+            tg_service = get_telegram_bot_api_service()
             use_case = ProcessBroadcastUseCase(uow=uow, tg_service=tg_service)
             return await use_case.execute(broadcast_id=uuid.UUID(broadcast_id))
     except (IntegrityError, SQLAlchemyError) as e:

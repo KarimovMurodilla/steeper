@@ -5,7 +5,6 @@ from fastapi import Depends
 from loggers import get_logger
 from src.bot.enums import BotRole
 from src.bot.schemas import BotCreateRequest, BotViewModel
-from src.bot.services.telegram_api import TelegramAPIService
 from src.core.database.session import get_unit_of_work
 from src.core.database.uow import ApplicationUnitOfWork, RepositoryProtocol
 from src.core.errors.exceptions import (
@@ -14,6 +13,8 @@ from src.core.errors.exceptions import (
 )
 from src.core.utils.encryption import encrypt_token
 from src.core.utils.security import hash_token
+from src.integrations.telegram.bot.telegram_bot_api import TelegramBotAPIService
+from src.integrations.telegram.dependencies import get_telegram_bot_api_service
 
 logger = get_logger(__name__)
 
@@ -24,7 +25,7 @@ class CreateBotUseCase:
     def __init__(
         self,
         uow: ApplicationUnitOfWork[RepositoryProtocol],
-        tg_service: TelegramAPIService,
+        tg_service: TelegramBotAPIService,
     ) -> None:
         self.uow = uow
         self.tg_service = tg_service
@@ -81,5 +82,6 @@ class CreateBotUseCase:
 
 def get_create_bot_use_case(
     uow: ApplicationUnitOfWork[RepositoryProtocol] = Depends(get_unit_of_work),
+    tg_service: TelegramBotAPIService = Depends(get_telegram_bot_api_service),
 ) -> CreateBotUseCase:
-    return CreateBotUseCase(uow=uow, tg_service=TelegramAPIService())
+    return CreateBotUseCase(uow=uow, tg_service=tg_service)
