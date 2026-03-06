@@ -48,9 +48,6 @@ class CreateBotUseCase:
             token_hash = hash_token(data.token)
             token_encrypted = encrypt_token(data.token)
 
-            profile_photos = bot_info.get_profile_photos(1, 1)
-            logger.info(f"{profile_photos}")
-
             bot_data = {
                 "workspace_id": workspace_id,
                 "name": bot_info.first_name,

@@ -63,6 +63,30 @@ class TelegramAPIService:
         finally:
             await self._close_bot_session(bot)
 
+    async def get_profile_photos(self, token: str, user_id: int, offset: int = 0, limit: int = 10) -> dict[str, Any] | None:
+        """
+        Retrieves the profile photos of a Telegram user.
+
+        Args:
+            token: The raw Telegram Bot Token.
+            user_id: The Telegram user ID.
+            offset: Sequential number of the first photo to be returned.
+            limit: Maximum number of photos to be returned.
+
+        Returns:
+            dict: The profile photos object as a dict, or None if failed.
+        """
+        bot = await self._get_bot_instance(token)
+        try:
+            photos = await bot.get_user_profile_photos(user_id=user_id, offset=offset, limit=limit)
+            photos_dict = photos.model_dump()
+            return photos_dict
+        except TelegramAPIError as e:
+            logger.error("Failed to get profile photos for user %s: %s", user_id, e)
+            return None
+        finally:
+            await self._close_bot_session(bot)
+
     async def set_webhook(self, token: str, url: str, secret_token: str) -> bool:
         """
         Sets the webhook for the bot to point to our backend.
