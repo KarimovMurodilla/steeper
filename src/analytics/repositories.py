@@ -20,14 +20,14 @@ class AuditLogRepository(BaseRepository[AuditLog]):
         page: int,
         size: int,
         bot_id: UUID | None = None,
-    ) -> tuple[list[tuple[AuditLog, str]], int]:
+    ) -> tuple[list[tuple[AuditLog, int]], int]:
         """
-        Returns paginated (AuditLog, actor_email) tuples, joined with users.
+        Returns paginated (AuditLog, actor_telegram_id) tuples, joined with users.
         Ordered by created_at DESC (newest first).
         Optionally filtered by bot_id.
         """
         base = (
-            select(self.model, User.email)
+            select(self.model, User.telegram_id)
             .join(User, User.id == self.model.admin_id)
             .order_by(self.model.created_at.desc())
         )
@@ -35,12 +35,12 @@ class AuditLogRepository(BaseRepository[AuditLog]):
             base = base.where(self.model.bot_id == bot_id)
 
         items_q = base.offset((page - 1) * size).limit(size)
-        rows = list((await session.execute(items_q)).all())
+        result = await session.execute(items_q)
+        rows = [(row[0], row[1]) for row in result.all()]
 
         count_q = select(func.count()).select_from(self.model)
         if bot_id is not None:
             count_q = count_q.where(self.model.bot_id == bot_id)
-        total = int((await session.execute(count_q)).scalar_one())
+        total = (await session.execute(count_q)).scalar_one()
 
-        return rows, total
-
+        return rows, int(total)

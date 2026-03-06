@@ -213,6 +213,7 @@ class AppConfig(BaseModel):
 
 class TelegramConfig(BaseModel):
     TELEGRAM_API_BASE: str
+    TELEGRAM_BOT_TOKEN: str
 
     model_config = ConfigDict(extra="ignore")
 

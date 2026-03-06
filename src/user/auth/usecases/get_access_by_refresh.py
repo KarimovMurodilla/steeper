@@ -4,12 +4,10 @@ from redis.asyncio import Redis
 
 from loggers import get_logger
 from src.core.errors.exceptions import (
-    InstanceProcessingException,
     PermissionDeniedException,
 )
 from src.core.redis.dependencies import get_redis_client
 from src.core.schemas import TokenModel
-from src.core.utils.security import mask_email
 from src.main.config import config
 from src.user.auth.jwt_payload_schema import JWTPayload
 from src.user.auth.security import create_access_token, rotate_refresh_token
@@ -32,16 +30,9 @@ class GetTokensByRefreshUserUseCase:
         if not user.is_active:
             logger.info(
                 "[RefreshTokens] Blocked user '%s' attempted refresh",
-                mask_email(user.email),
+                user.telegram_id,
             )
             raise PermissionDeniedException("User is blocked")
-
-        if not user.is_verified:
-            logger.info(
-                "[RefreshTokens] Unverified user '%s' attempted refresh",
-                mask_email(user.email),
-            )
-            raise InstanceProcessingException("User is not verified")
 
         # Use rotation helper to handle the previous token safely
         new_refresh_token = await rotate_refresh_token(

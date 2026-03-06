@@ -59,12 +59,8 @@ def include_routers(app: FastAPI) -> None:
         communication_routers.router, prefix="/communications", tags=["Communications"]
     )
     v1_router.include_router(bot_routers.router, prefix="/bots", tags=["Bots"])
-    v1_router.include_router(
-        chat_routers.router, prefix="/bots", tags=["Chats"]
-    )
-    v1_router.include_router(
-        analytics_router, prefix="/bots", tags=["Analytics"]
-    )
+    v1_router.include_router(chat_routers.router, prefix="/bots", tags=["Chats"])
+    v1_router.include_router(analytics_router, prefix="/bots", tags=["Analytics"])
     v1_router.include_router(
         analytics_audit_router, prefix="/audit-logs", tags=["Audit Logs"]
     )

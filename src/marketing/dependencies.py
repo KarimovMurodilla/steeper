@@ -5,7 +5,7 @@ from src.core.database.uow import ApplicationUnitOfWork, RepositoryProtocol
 from src.marketing.usecases.create_campaign import CreateBroadcastUseCase
 from src.marketing.usecases.get_campaign_stats import GetBroadcastStatsUseCase
 from src.marketing.usecases.launch_broadcast import LaunchBroadcastUseCase
-from src.marketing.usecases.process_broadcast import ProcessBroadcastUseCase
+
 
 def get_create_broadcast_use_case(
     uow: ApplicationUnitOfWork[RepositoryProtocol] = Depends(get_unit_of_work),
@@ -23,9 +23,3 @@ def get_get_broadcast_stats_use_case(
     uow: ApplicationUnitOfWork[RepositoryProtocol] = Depends(get_unit_of_work),
 ) -> GetBroadcastStatsUseCase:
     return GetBroadcastStatsUseCase(uow=uow)
-
-
-def get_process_broadcast_use_case(
-    uow: ApplicationUnitOfWork[RepositoryProtocol] = Depends(get_unit_of_work),
-) -> ProcessBroadcastUseCase:
-    return ProcessBroadcastUseCase(uow=uow)

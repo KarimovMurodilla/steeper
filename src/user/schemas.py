@@ -1,29 +1,28 @@
 from uuid import UUID
 
-from pydantic import EmailStr
-
 from src.core.schemas import Base
 
 
 class UserProfileViewModel(Base):
     id: UUID
-    first_name: str
-    last_name: str
-    username: str
-    email: EmailStr
-    is_verified: bool
+    telegram_id: int
+    first_name: str | None = None
+    last_name: str | None = None
+    username: str | None = None
+    language_code: str | None = None
+    photo_url: str | None = None
 
 
 class UserSummaryViewModel(Base):
     id: UUID
-    email: EmailStr
-    first_name: str
-    last_name: str
-    username: str
+    telegram_id: int
+    first_name: str | None = None
+    last_name: str | None = None
+    username: str | None = None
 
 
 class UserSummaryWithContactsViewModel(Base):
     id: UUID
+    telegram_id: int
     full_name: str
-    username: str
-    email: EmailStr
+    username: str | None = None

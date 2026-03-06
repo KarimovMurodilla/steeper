@@ -1,5 +1,4 @@
 from celery import Celery
-from celery.schedules import crontab
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from loggers import get_logger
@@ -38,10 +37,3 @@ celery_app.conf.update(
     timezone="UTC",
     enable_utc=True,
 )
-
-celery_app.conf.beat_schedule = {
-    "cleanup_unverified_users_every_10_hours": {
-        "task": "cleanup_unverified_users",
-        "schedule": crontab(minute=0, hour="*/10"),
-    },
-}

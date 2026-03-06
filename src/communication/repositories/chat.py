@@ -66,7 +66,10 @@ class ChatRepository(SoftDeleteRepository[Chat]):
         stmt = (
             select(func.count())
             .select_from(self.model)
-            .where(self.model.bot_id == bot_id, self.model.is_deleted == False)  # noqa: E712
+            .where(
+                self.model.bot_id == bot_id,
+                self.model.is_deleted == False,  # noqa: E712
+            )
         )
         return int((await session.execute(stmt)).scalar_one())
 

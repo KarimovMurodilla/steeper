@@ -1,64 +1,42 @@
-from pydantic import EmailStr, field_validator
+from enum import StrEnum
 
-from src.core.schemas import (
-    Base,
-    EmailNormalizationMixin,
-    StrongPasswordValidationMixin,
-)
-from src.core.validations import (
-    FULL_NAME_PATTERN,
-    USERNAME_VALIDATOR,
-)
+from pydantic import model_validator
+
+from src.core.schemas import Base, TokenModel
+from src.user.schemas import UserProfileViewModel
 
 
-class CreateUserModel(StrongPasswordValidationMixin, EmailNormalizationMixin, Base):
+class TelegramAuthSource(StrEnum):
+    WEBAPP = "webapp"
+    LOGIN_WIDGET = "login_widget"
+
+
+class TelegramLoginWidgetSchema(Base):
+    id: int
     first_name: str
-    last_name: str
-    email: EmailStr
-    username: str
-    password: str
-
-    @field_validator("first_name")
-    @classmethod
-    def validate_first_name(cls, value: str) -> str:
-        if not FULL_NAME_PATTERN.match(value):
-            raise ValueError("First name must contain latin letters and spaces only")
-        return value
-
-    @field_validator("last_name")
-    @classmethod
-    def validate_last_name(cls, value: str) -> str:
-        if not FULL_NAME_PATTERN.match(value):
-            raise ValueError("Last name must contain latin letters and spaces only")
-        return value
-
-    @field_validator("username")
-    @classmethod
-    def validate_username(cls, value: str) -> str:
-        if not USERNAME_VALIDATOR.match(value):
-            raise ValueError(
-                "Username must be from 4 to 60 symbols and contain alphanumeric characters, underscore, dash, and dot"
-            )
-        return value
+    last_name: str | None = None
+    username: str | None = None
+    photo_url: str | None = None
+    auth_date: int
+    hash: str
 
 
-class ResendVerificationModel(EmailNormalizationMixin, Base):
-    email: EmailStr
+class TelegramAuthRequest(Base):
+    source: TelegramAuthSource
+    init_data: str | None = None
+    telegram_login: TelegramLoginWidgetSchema | None = None
+
+    @model_validator(mode="after")
+    def validate_auth(self) -> "TelegramAuthRequest":
+        if self.source == TelegramAuthSource.WEBAPP and not self.init_data:
+            raise ValueError("init_data required")
+
+        if self.source == TelegramAuthSource.LOGIN_WIDGET and not self.telegram_login:
+            raise ValueError("telegram_login required")
+
+        return self
 
 
-class LoginUserModel(EmailNormalizationMixin, Base):
-    email: EmailStr
-    password: str
-
-
-class SendResetPasswordRequestModel(EmailNormalizationMixin, Base):
-    email: EmailStr
-
-
-class ResetPasswordModel(StrongPasswordValidationMixin, Base):
-    token: str
-    password: str
-
-
-class UserNewPassword(StrongPasswordValidationMixin, Base):
-    password: str
+class TelegramAuthResponse(Base):
+    tokens: TokenModel
+    user: UserProfileViewModel

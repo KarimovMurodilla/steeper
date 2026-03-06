@@ -28,7 +28,7 @@ class BroadcastCreateRequest(Base):
                 now = datetime.now(timezone.utc)
             else:
                 now = datetime.now()
-                
+
             if v < now:
                 raise ValueError("schedule_at must not be in the past")
         return v

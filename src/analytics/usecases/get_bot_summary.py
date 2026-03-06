@@ -1,4 +1,5 @@
 """Use case: return analytics summary for a single bot."""
+
 from uuid import UUID
 
 from fastapi import Depends

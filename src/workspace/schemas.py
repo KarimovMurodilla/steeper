@@ -1,7 +1,7 @@
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import EmailStr, Field
+from pydantic import Field
 
 from src.core.schemas import Base
 from src.user.schemas import UserSummaryViewModel
@@ -25,7 +25,7 @@ class WorkspaceUpdateRequest(Base):
 class InviteMemberRequest(Base):
     """Schema for inviting a user to the workspace."""
 
-    email: EmailStr = Field(..., description="Email of the user to invite")
+    telegram_id: int = Field(..., description="Telegram ID of the user to invite")
     role: WorkspaceRole = Field(
         default=WorkspaceRole.MEMBER, description="Role in the workspace (owner/member)"
     )

@@ -1,13 +1,13 @@
-from sqlalchemy import func
-from sqlalchemy import DateTime
 from datetime import datetime
 from typing import Any
 from uuid import UUID as PY_UUID
 
 from sqlalchemy import (
+    DateTime,
     Enum as SQLEnum,
     ForeignKey,
     Text,
+    func,
 )
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
@@ -29,9 +29,7 @@ class Broadcast(Base, UUIDIDMixin, TimestampMixin, SoftDeleteMixin):
     created_by: Mapped[PY_UUID] = mapped_column(ForeignKey("users.id"), nullable=True)
 
     message_content: Mapped[str] = mapped_column(Text)
-    filters: Mapped[dict[str, Any]] = mapped_column(
-        JSONB, default=dict
-    )
+    filters: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict)
     status: Mapped[BroadcastStatus] = mapped_column(
         SQLEnum(BroadcastStatus), default=BroadcastStatus.DRAFT
     )

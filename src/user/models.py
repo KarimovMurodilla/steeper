@@ -1,7 +1,7 @@
 from typing import TYPE_CHECKING
 
 from sqlalchemy import Boolean, Index, String, text
-from sqlalchemy.orm import Mapped, mapped_column, relationship, validates
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.core.database.base import Base
 from src.core.database.mixins import (
@@ -9,7 +9,6 @@ from src.core.database.mixins import (
     TimestampMixin,
     UUIDIDMixin,
 )
-from src.core.utils.security import hash_password
 
 if TYPE_CHECKING:
     from src.bot.models import AdminBotRole
@@ -20,8 +19,8 @@ class User(Base, UUIDIDMixin, TimestampMixin, SoftDeleteMixin):
     __tablename__ = "users"
     __table_args__ = (
         Index(
-            "uq_users_email_active_not_deleted",
-            "email",
+            "uq_users_telegram_id_active_not_deleted",
+            "telegram_id",
             unique=True,
             postgresql_where=text("is_deleted = false"),
         ),
@@ -33,14 +32,14 @@ class User(Base, UUIDIDMixin, TimestampMixin, SoftDeleteMixin):
         ),
     )
 
-    first_name: Mapped[str] = mapped_column(String(50))
-    last_name: Mapped[str] = mapped_column(String(50))
-    email: Mapped[str] = mapped_column(String(255))
-    username: Mapped[str] = mapped_column(String(60))
-    password: Mapped[str] = mapped_column(String(255))
+    telegram_id: Mapped[int] = mapped_column(nullable=False)
+    username: Mapped[str | None] = mapped_column(String(60), nullable=True)
+    first_name: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    last_name: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    language_code: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    photo_url: Mapped[str | None] = mapped_column(String(1024), nullable=True)
 
     is_superuser: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
-    is_verified: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
     # Relationships
@@ -51,12 +50,11 @@ class User(Base, UUIDIDMixin, TimestampMixin, SoftDeleteMixin):
         "AdminBotRole", back_populates="admin", cascade="all, delete-orphan"
     )
 
-    @validates("password")
-    def validate_password(self, _: str, value: str) -> str:
-        if value != self.password:
-            value = hash_password(value)
-        return value
-
     @property
     def full_name(self) -> str:
-        return f"{self.first_name} {self.last_name}"
+        parts = []
+        if self.first_name:
+            parts.append(self.first_name)
+        if self.last_name:
+            parts.append(self.last_name)
+        return " ".join(parts) if parts else str(self.telegram_id)

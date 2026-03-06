@@ -24,6 +24,9 @@ def _base_app_config_data() -> dict[str, object]:
         "PROJECT_SECRET_KEY": "secret",
         "PING_INTERVAL": 10,
         "CONNECTION_TTL": 10,
+        "ENCRYPTION_LENGTH": 32,
+        "ENCRYPTION_SALT": "kj23f34il43smn782bh19a40gud24gtga982ftde",
+        "ENCRYPTION_ITERATIONS": 100000,
     }
 
 

@@ -1,7 +1,6 @@
-from src.bot.services.telegram_api import TelegramAPIService
-from src.core.database.uow import get_uow
-import sentry_sdk
 import uuid
+
+import sentry_sdk
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
 from celery_tasks.main import (
@@ -10,6 +9,8 @@ from celery_tasks.main import (
 )
 from celery_tasks.types import typed_shared_task
 from loggers import get_logger
+from src.bot.services.telegram_api import TelegramAPIService
+from src.core.database.uow import get_uow
 from src.core.utils.coroutine_runner import execute_coroutine_sync
 from src.marketing.usecases.process_broadcast import ProcessBroadcastUseCase
 
@@ -18,9 +19,7 @@ logger = get_logger(__name__)
 
 @typed_shared_task(name="process_broadcast")
 def process_broadcast_task(broadcast_id: str) -> str:
-    result = execute_coroutine_sync(
-        coroutine=lambda: _process_broadcast(broadcast_id)
-    )
+    result = execute_coroutine_sync(coroutine=lambda: _process_broadcast(broadcast_id))
     return result
 
 

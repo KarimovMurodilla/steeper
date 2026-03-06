@@ -34,11 +34,6 @@ def require_permission(
                 "You do not have permission to access this resource. User is blocked",
             )
 
-        if not current_user.is_verified:
-            raise AccessForbiddenException(
-                "You do not have permission to access this resource. Verified users only",
-            )
-
         if current_user.is_superuser:
             return current_user
 

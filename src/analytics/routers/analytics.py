@@ -1,4 +1,5 @@
 """Analytics summary router — mounted under /v1/bots."""
+
 from typing import Annotated
 from uuid import UUID
 

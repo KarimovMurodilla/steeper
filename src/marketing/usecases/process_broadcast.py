@@ -14,18 +14,18 @@ from src.marketing.enums import BroadcastStatus, DeliveryStatus
 
 logger = get_logger(__name__)
 
-RATE_LIMIT_DELAY = 0.05  
-DB_COMMIT_BATCH_SIZE = 50 
-MAX_RETRIES = 3 
+RATE_LIMIT_DELAY = 0.05
+DB_COMMIT_BATCH_SIZE = 50
+MAX_RETRIES = 3
 
 
 class ProcessBroadcastUseCase:
     """Use case for processing a broadcast campaign and dispatching messages."""
 
     def __init__(
-        self, 
-        uow: ApplicationUnitOfWork[RepositoryProtocol], 
-        tg_service: TelegramAPIService
+        self,
+        uow: ApplicationUnitOfWork[RepositoryProtocol],
+        tg_service: TelegramAPIService,
     ) -> None:
         self.uow = uow
         self.tg_service = tg_service
@@ -72,7 +72,7 @@ class ProcessBroadcastUseCase:
             for index, user in enumerate(users):
                 success = False
                 tg_message_id = None
-                
+
                 for attempt in range(MAX_RETRIES):
                     try:
                         response = await self.tg_service.send_message(
@@ -84,18 +84,25 @@ class ProcessBroadcastUseCase:
                         if success and isinstance(response, dict):
                             tg_message_id = response.get("message_id")
                         break
-                        
+
                     except Exception as e:
                         error_msg = str(e).lower()
                         if "429" in error_msg or "too many requests" in error_msg:
                             sleep_time = 3 * (attempt + 1)
                             logger.warning(
-                                "Rate limit hit for user %s (Attempt %s/%s). Sleeping for %ss...", 
-                                user.tg_user_id, attempt + 1, MAX_RETRIES, sleep_time
+                                "Rate limit hit for user %s (Attempt %s/%s). Sleeping for %ss...",
+                                user.tg_user_id,
+                                attempt + 1,
+                                MAX_RETRIES,
+                                sleep_time,
                             )
                             await asyncio.sleep(sleep_time)
                         else:
-                            logger.warning("Failed to send broadcast to user %s: %s", user.tg_user_id, e)
+                            logger.warning(
+                                "Failed to send broadcast to user %s: %s",
+                                user.tg_user_id,
+                                e,
+                            )
                             break
 
                 status = DeliveryStatus.SUCCESS if success else DeliveryStatus.FAILED
@@ -110,7 +117,9 @@ class ProcessBroadcastUseCase:
                 )
 
                 if success and tg_message_id:
-                    chat = await uow.chats.get_by_tg_user(uow.session, broadcast.bot_id, user.id)
+                    chat = await uow.chats.get_by_tg_user(
+                        uow.session, broadcast.bot_id, user.id
+                    )
                     if not chat:
                         chat = await uow.chats.create(
                             uow.session,
@@ -143,7 +152,9 @@ class ProcessBroadcastUseCase:
                     try:
                         await uow.commit()
                     except Exception as e:
-                        logger.exception("Failed to batch commit at index %s: %s", index, e)
+                        logger.exception(
+                            "Failed to batch commit at index %s: %s", index, e
+                        )
 
                 await asyncio.sleep(RATE_LIMIT_DELAY)
 
@@ -152,11 +163,13 @@ class ProcessBroadcastUseCase:
                 broadcast.status = (
                     BroadcastStatus.SENT if sent_count > 0 else BroadcastStatus.FAILED
                 )
-            
+
             try:
                 await uow.commit()
             except Exception as e:
-                logger.exception("Failed to commit final broadcast %s results: %s", broadcast_id, e)
+                logger.exception(
+                    "Failed to commit final broadcast %s results: %s", broadcast_id, e
+                )
                 sentry_sdk.capture_exception(e)
                 return f"Broadcast {broadcast_id} results commit failed"
 
