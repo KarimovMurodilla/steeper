@@ -43,7 +43,7 @@ class TgMessage(Base):
     model_config = ConfigDict(extra="ignore")
 
     message_id: int
-    from_user: TgUser | None = Field(default=None, alias="from_user")
+    from_user: TgUser | None = Field(default=None, alias="from")
     chat: TgChat
     date: int
     text: str | None = None

@@ -1,6 +1,7 @@
 from typing import Annotated
+from uuid import UUID
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Header, status
 
 from src.communication.schemas import BotMessagePayload, TelegramUpdatePayload
 from src.communication.usecases.handle_webhook import (
@@ -17,14 +18,15 @@ router = APIRouter()
 
 
 @router.post(
-    "/webhook/{token_hash}",
+    "/webhook/{bot_id}",
     status_code=status.HTTP_200_OK,
     response_model=SuccessResponse,
 )
 async def handle_telegram_webhook(
-    token_hash: str,
+    bot_id: UUID,
     payload: TelegramUpdatePayload,
     use_case: Annotated[HandleWebhookUseCase, Depends(get_handle_webhook_use_case)],
+    x_telegram_bot_api_secret_token: Annotated[str, Header()] = "",
 ) -> SuccessResponse:
     """
     Universal entry point for Telegram Updates.
@@ -34,7 +36,7 @@ async def handle_telegram_webhook(
 
     The payload must match the standard Telegram 'Update' JSON structure.
     """
-    return await use_case.execute(token_hash, payload)
+    return await use_case.execute(bot_id, payload, x_telegram_bot_api_secret_token)
 
 
 @router.post(

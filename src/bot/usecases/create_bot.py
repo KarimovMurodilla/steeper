@@ -15,6 +15,7 @@ from src.core.utils.encryption import encrypt_token
 from src.core.utils.security import hash_token
 from src.integrations.telegram.bot.telegram_bot_api import TelegramBotAPIService
 from src.integrations.telegram.dependencies import get_telegram_bot_api_service
+from src.main.config import config
 
 logger = get_logger(__name__)
 
@@ -75,9 +76,20 @@ class CreateBotUseCase:
 
             await uow.commit()
 
-            logger.info(f"Bot created successfully: {new_bot.id} by Admin {user_id}")
+        webhook_url = f"{config.telegram.TELEGRAM_WEBHOOK_URL}/{result.id}"
+        is_webhook_set = await self.tg_service.set_webhook(
+            token=data.token,
+            url=webhook_url,
+            secret_token=token_hash,
+        )
+        if not is_webhook_set:
+            logger.warning(f"Webhook setup failed for bot {result.id}")
+        else:
+            logger.info(f"Webhook set successfully for bot {result.id}")
 
-            return result
+        logger.info(f"Bot created successfully: {result.id} by Admin {user_id}")
+
+        return result
 
 
 def get_create_bot_use_case(

@@ -1,3 +1,5 @@
+from uuid import UUID
+
 from fastapi import Depends
 
 from loggers import get_logger
@@ -5,7 +7,10 @@ from src.communication.enums import ChatStatus, MessageType, SenderType
 from src.communication.schemas import TelegramUpdatePayload
 from src.core.database.session import get_unit_of_work
 from src.core.database.uow import ApplicationUnitOfWork, RepositoryProtocol
-from src.core.errors.exceptions import InstanceNotFoundException
+from src.core.errors.exceptions import (
+    AccessForbiddenException,
+    InstanceNotFoundException,
+)
 from src.core.schemas import SuccessResponse
 
 logger = get_logger(__name__)
@@ -28,8 +33,11 @@ class HandleWebhookUseCase:
         self.uow = uow
 
     async def execute(
-        self, token_hash: str, payload: TelegramUpdatePayload
+        self, bot_id: UUID, payload: TelegramUpdatePayload, secret_token: str
     ) -> SuccessResponse:
+        logger.info("Received webhook for bot: %s", bot_id)
+        logger.info("Received webhook for payload: %s", payload)
+
         tg_msg = payload.message or payload.edited_message
 
         if not tg_msg:
@@ -43,13 +51,17 @@ class HandleWebhookUseCase:
             return SuccessResponse(success=True)
 
         async with self.uow as uow:
-            bot = await uow.bots.get_by_token_hash(uow.session, token_hash)
+            bot = await uow.bots.get_single(uow.session, id=bot_id)
 
             if not bot:
-                logger.warning(
-                    "Webhook received for unknown token hash: %s", token_hash
-                )
+                logger.warning("Webhook received for unknown bot_id: %s", bot_id)
                 raise InstanceNotFoundException("Bot not found")
+
+            if bot.token_hash != secret_token:
+                logger.warning(
+                    "Webhook received with invalid secret token for bot: %s", bot_id
+                )
+                raise AccessForbiddenException("Invalid secret token")
 
             if not bot.status == "active":
                 logger.info("Webhook skipped for disabled bot: %s", bot.id)
