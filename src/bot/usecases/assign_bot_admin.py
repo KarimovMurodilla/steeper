@@ -1,12 +1,7 @@
-"""Use case: assign a bot admin role to a workspace member."""
-
 from uuid import UUID
-
-from fastapi import Depends
 
 from loggers import get_logger
 from src.bot.schemas import AdminBotRoleAssignRequest, AdminBotRoleViewModel
-from src.core.database.session import get_unit_of_work
 from src.core.database.uow.abstract import RepositoryProtocol
 from src.core.database.uow.application import ApplicationUnitOfWork
 from src.core.errors.enums import ErrorCode
@@ -41,6 +36,21 @@ class AssignBotAdminUseCase:
         workspace_id: UUID,
         data: AdminBotRoleAssignRequest,
     ) -> AdminBotRoleViewModel:
+        """
+        Executes the business logic for assigning a bot admin role to a user.
+
+        Args:
+            bot_id (UUID): The unique identifier of the bot.
+            workspace_id (UUID): The unique identifier of the workspace.
+            data (AdminBotRoleAssignRequest): The payload containing assignment details.
+
+        Returns:
+            AdminBotRoleViewModel: The assigned Admin Bot Role model.
+
+        Raises:
+            InstanceNotFoundException: If the user, bot, or workspace member is not found.
+            InstanceAlreadyExistsException: If the user already has a role for the bot.
+        """
         async with self._uow as uow:
             user = await uow.users.get_single(uow.session, id=data.user_id)
             if not user:
@@ -79,9 +89,3 @@ class AssignBotAdminUseCase:
             await uow.commit()
 
             return AdminBotRoleViewModel.model_validate(admin_role)
-
-
-def get_assign_bot_admin_use_case(
-    uow: ApplicationUnitOfWork[RepositoryProtocol] = Depends(get_unit_of_work),
-) -> AssignBotAdminUseCase:
-    return AssignBotAdminUseCase(uow=uow)

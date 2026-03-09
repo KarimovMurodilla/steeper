@@ -32,6 +32,15 @@ class ProcessBroadcastUseCase:
         self.tg_service = tg_service
 
     async def execute(self, broadcast_id: UUID) -> str:
+        """
+        Executes the specific business logic for processing a broadcast campaign.
+
+        Args:
+            broadcast_id (UUID): The unique identifier of the broadcast to process.
+
+        Returns:
+            str: A summary string of the broadcast results.
+        """
         async with self.uow as uow:
             broadcast = await uow.broadcasts.get_single(uow.session, id=broadcast_id)
             if not broadcast:

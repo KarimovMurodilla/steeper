@@ -3,15 +3,13 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, Header, status
 
-from src.communication.schemas import BotMessagePayload, TelegramUpdatePayload
-from src.communication.usecases.handle_webhook import (
-    HandleWebhookUseCase,
+from src.communication.dependencies import (
     get_handle_webhook_use_case,
-)
-from src.communication.usecases.log_bot_message import (
-    LogBotMessageUseCase,
     get_log_bot_message_use_case,
 )
+from src.communication.schemas import BotMessagePayload, TelegramUpdatePayload
+from src.communication.usecases.handle_webhook import HandleWebhookUseCase
+from src.communication.usecases.log_bot_message import LogBotMessageUseCase
 from src.core.schemas import SuccessResponse
 
 router = APIRouter()

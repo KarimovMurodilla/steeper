@@ -8,6 +8,8 @@ from src.core.pagination import PaginatedResponse, PaginationParams
 from src.user.auth.dependencies import get_current_user
 from src.user.models import User
 from src.workspace.dependencies import (
+    get_create_workspace_use_case,
+    get_invite_member_use_case,
     get_workspace_member_service,
     get_workspace_service,
 )
@@ -23,14 +25,8 @@ from src.workspace.schemas import (
 )
 from src.workspace.services.workspace import WorkspaceService
 from src.workspace.services.workspace_member import WorkspaceMemberService
-from src.workspace.usecases.create_workspace import (
-    CreateWorkspaceUseCase,
-    get_create_workspace_use_case,
-)
-from src.workspace.usecases.invite_member import (
-    InviteMemberUseCase,
-    get_invite_member_use_case,
-)
+from src.workspace.usecases.create_workspace import CreateWorkspaceUseCase
+from src.workspace.usecases.invite_member import InviteMemberUseCase
 
 router = APIRouter()
 

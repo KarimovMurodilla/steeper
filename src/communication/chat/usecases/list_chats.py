@@ -2,10 +2,7 @@
 
 from uuid import UUID
 
-from fastapi import Depends
-
 from src.communication.schemas import ChatListItemViewModel
-from src.core.database.session import get_unit_of_work
 from src.core.database.uow.abstract import RepositoryProtocol
 from src.core.database.uow.application import ApplicationUnitOfWork
 from src.core.pagination import (
@@ -29,6 +26,16 @@ class ListChatsUseCase:
         bot_id: UUID,
         pagination: PaginationParams,
     ) -> PaginatedResponse[ChatListItemViewModel]:
+        """
+        Executes the business logic for listing paginated bot chats.
+
+        Args:
+            bot_id (UUID): The unique identifier of the bot.
+            pagination (PaginationParams): The pagination parameters.
+
+        Returns:
+            PaginatedResponse[ChatListItemViewModel]: The paginated list of chats for the bot.
+        """
         async with self.uow as uow:
             chats, total = await uow.chats.get_paginated_by_bot(
                 uow.session,
@@ -54,9 +61,3 @@ class ListChatsUseCase:
                 )
 
         return make_paginated_response(items=items, total=total, pagination=pagination)
-
-
-def get_list_chats_use_case(
-    uow: ApplicationUnitOfWork[RepositoryProtocol] = Depends(get_unit_of_work),
-) -> ListChatsUseCase:
-    return ListChatsUseCase(uow=uow)

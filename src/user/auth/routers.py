@@ -6,6 +6,8 @@ from src.core.limiter.depends import RateLimiter
 from src.core.schemas import TokenModel
 from src.user.auth.dependencies import (
     get_access_by_refresh_token,
+    get_telegram_auth_use_case,
+    get_tokens_by_refresh_user_use_case,
     get_user_id_from_token,
 )
 from src.user.auth.jwt_payload_schema import JWTPayload
@@ -13,14 +15,8 @@ from src.user.auth.schemas import (
     TelegramAuthRequest,
     TelegramAuthResponse,
 )
-from src.user.auth.usecases.get_access_by_refresh import (
-    GetTokensByRefreshUserUseCase,
-    get_tokens_by_refresh_user_use_case,
-)
-from src.user.auth.usecases.telegram_auth import (
-    TelegramAuthUseCase,
-    get_telegram_auth_use_case,
-)
+from src.user.auth.usecases.get_access_by_refresh import GetTokensByRefreshUserUseCase
+from src.user.auth.usecases.telegram_auth import TelegramAuthUseCase
 from src.user.models import User
 
 router = APIRouter()

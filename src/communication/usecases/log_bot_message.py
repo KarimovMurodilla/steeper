@@ -1,9 +1,6 @@
-from fastapi import Depends
-
 from loggers import get_logger
 from src.communication.enums import ChatStatus, MessageType, SenderType
 from src.communication.schemas import BotMessagePayload
-from src.core.database.session import get_unit_of_work
 from src.core.database.uow import ApplicationUnitOfWork, RepositoryProtocol
 from src.core.errors.enums import ErrorCode
 from src.core.errors.exceptions import InstanceNotFoundException
@@ -29,6 +26,19 @@ class LogBotMessageUseCase:
     async def execute(
         self, token_hash: str, payload: BotMessagePayload
     ) -> SuccessResponse:
+        """
+        Executes the business logic for logging a bot message.
+
+        Args:
+            token_hash (str): The security token hash of the bot.
+            payload (BotMessagePayload): The message payload.
+
+        Returns:
+            SuccessResponse: A success confirmation response.
+
+        Raises:
+            InstanceNotFoundException: If the bot or telegram user is not found.
+        """
         async with self.uow as uow:
             bot = await uow.bots.get_by_token_hash(uow.session, token_hash)
 
@@ -91,9 +101,3 @@ class LogBotMessageUseCase:
             )
 
         return SuccessResponse(success=True)
-
-
-def get_log_bot_message_use_case(
-    uow: ApplicationUnitOfWork[RepositoryProtocol] = Depends(get_unit_of_work),
-) -> LogBotMessageUseCase:
-    return LogBotMessageUseCase(uow=uow)

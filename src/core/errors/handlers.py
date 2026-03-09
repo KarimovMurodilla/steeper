@@ -127,6 +127,8 @@ def format_log_message(
         log_msg = f"{prefix}[{code}] {method} {endpoint}"
 
     if raw_message:
+        if len(raw_message) > 500:
+            raw_message = raw_message[:497] + "..."
         log_msg += f" | Msg: {raw_message}"
 
     if params:

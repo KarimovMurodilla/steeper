@@ -3,6 +3,7 @@ from uuid import uuid4
 
 import pytest
 
+from src.core.errors.enums import ErrorCode
 from src.core.errors.exceptions import (
     PermissionDeniedException,
     UnauthorizedException,
@@ -106,7 +107,7 @@ async def test_telegram_auth_widget_no_workspace(
     with pytest.raises(PermissionDeniedException) as exc:
         await use_case.execute(req)
 
-    assert exc.value.message == "USER_NOT_ALLOWED"
+    assert exc.value.code == ErrorCode.AUTH_PERMISSION_DENIED
 
 
 @pytest.mark.asyncio
@@ -164,4 +165,4 @@ async def test_telegram_auth_invalid_signature(
     with pytest.raises(UnauthorizedException) as exc:
         await use_case.execute(req)
 
-    assert exc.value.message == "INVALID_TELEGRAM_SIGNATURE"
+    assert exc.value.code == ErrorCode.AUTH_TELEGRAM_HASH_MISMATCH

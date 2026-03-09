@@ -1,11 +1,8 @@
 from uuid import UUID
 
-from fastapi import Depends
-
 from loggers import get_logger
 from src.bot.enums import BotRole
 from src.bot.schemas import BotCreateRequest, BotViewModel
-from src.core.database.session import get_unit_of_work
 from src.core.database.uow import ApplicationUnitOfWork, RepositoryProtocol
 from src.core.errors.enums import ErrorCode
 from src.core.errors.exceptions import (
@@ -15,7 +12,6 @@ from src.core.errors.exceptions import (
 from src.core.utils.encryption import encrypt_token
 from src.core.utils.security import hash_token
 from src.integrations.telegram.bot.telegram_bot_api import TelegramBotAPIService
-from src.integrations.telegram.dependencies import get_telegram_bot_api_service
 from src.main.config import config
 
 logger = get_logger(__name__)
@@ -38,6 +34,21 @@ class CreateBotUseCase:
         user_id: UUID,
         workspace_id: UUID | None,
     ) -> BotViewModel:
+        """
+        Executes the business logic for creating a new Telegram Bot.
+
+        Args:
+            data (BotCreateRequest): The payload containing bot details.
+            user_id (UUID): The unique identifier of the user creating the bot.
+            workspace_id (UUID | None): The current workspace ID.
+
+        Returns:
+            BotViewModel: The created bot details.
+
+        Raises:
+            AccessForbiddenException: If the user lacks workspace access.
+            CoreException: If the provided bot token is invalid.
+        """
         if not workspace_id:
             raise AccessForbiddenException(ErrorCode.WORKSPACE_ACCESS_DENIED)
 
@@ -89,10 +100,3 @@ class CreateBotUseCase:
         logger.info(f"Bot created successfully: {result.id} by Admin {user_id}")
 
         return result
-
-
-def get_create_bot_use_case(
-    uow: ApplicationUnitOfWork[RepositoryProtocol] = Depends(get_unit_of_work),
-    tg_service: TelegramBotAPIService = Depends(get_telegram_bot_api_service),
-) -> CreateBotUseCase:
-    return CreateBotUseCase(uow=uow, tg_service=tg_service)

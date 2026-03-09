@@ -5,11 +5,9 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, status
 
+from src.analytics.dependencies import get_bot_analytics_summary_use_case
 from src.analytics.schemas import BotAnalyticsSummary
-from src.analytics.usecases.get_bot_summary import (
-    GetBotAnalyticsSummaryUseCase,
-    get_bot_analytics_summary_use_case,
-)
+from src.analytics.usecases.get_bot_summary import GetBotAnalyticsSummaryUseCase
 from src.bot.enums import BotRole
 from src.bot.permissions.checker import require_bot_permission
 from src.bot.permissions.enum import BotPermission

@@ -25,6 +25,19 @@ class CreateBroadcastUseCase:
     async def execute(
         self, user_id: UUID, data: BroadcastCreateRequest
     ) -> BroadcastResponse:
+        """
+        Executes the specific business logic for creating a broadcast campaign.
+
+        Args:
+            user_id (UUID): The unique identifier of the user creating the campaign.
+            data (BroadcastCreateRequest): The payload containing campaign details.
+
+        Returns:
+            BroadcastResponse: The created broadcast campaign details.
+
+        Raises:
+            InstanceNotFoundException: If the bot ID does not exist.
+        """
         async with self.uow as uow:
             bot = await uow.bots.get_single(uow.session, id=data.bot_id)
             if not bot:

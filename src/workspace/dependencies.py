@@ -4,7 +4,9 @@ from uuid import UUID
 from fastapi import Depends, Header
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.core.database.session import get_session
+from src.core.database.session import get_session, get_unit_of_work
+from src.core.database.uow.abstract import RepositoryProtocol
+from src.core.database.uow.application import ApplicationUnitOfWork
 from src.core.errors.enums import ErrorCode
 from src.core.errors.exceptions import PermissionDeniedException
 from src.user.auth.dependencies import get_current_user
@@ -14,6 +16,8 @@ from src.workspace.repositories.workspace import WorkspaceRepository
 from src.workspace.repositories.workspace_member import WorkspaceMemberRepository
 from src.workspace.services.workspace import WorkspaceService
 from src.workspace.services.workspace_member import WorkspaceMemberService
+from src.workspace.usecases.create_workspace import CreateWorkspaceUseCase
+from src.workspace.usecases.invite_member import InviteMemberUseCase
 
 
 async def get_current_workspace_id(
@@ -60,3 +64,15 @@ async def get_workspace_member_service() -> WorkspaceMemberService:
     return WorkspaceMemberService(
         repository=workspace_member_repo,
     )
+
+
+def get_create_workspace_use_case(
+    uow: ApplicationUnitOfWork[RepositoryProtocol] = Depends(get_unit_of_work),
+) -> CreateWorkspaceUseCase:
+    return CreateWorkspaceUseCase(uow=uow)
+
+
+def get_invite_member_use_case(
+    uow: ApplicationUnitOfWork[RepositoryProtocol] = Depends(get_unit_of_work),
+) -> InviteMemberUseCase:
+    return InviteMemberUseCase(uow=uow)

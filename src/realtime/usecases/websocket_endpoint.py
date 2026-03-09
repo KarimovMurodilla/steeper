@@ -2,13 +2,12 @@ import asyncio
 import time
 from typing import cast
 
-from fastapi import Depends, WebSocket, WebSocketDisconnect
+from fastapi import WebSocket, WebSocketDisconnect
 from pydantic import ValidationError
 from redis.asyncio import Redis
 
 from loggers import get_logger
 from src.core.errors.exceptions import UnauthorizedException
-from src.realtime.dependencies import get_connection_manager
 from src.realtime.enums import EventType, WSAction
 from src.realtime.manager import ConnectionManager
 from src.realtime.schemas import WSDownlinkEnvelope, WSErrorPayload, WSUplinkMessage
@@ -73,7 +72,15 @@ class WebsocketEndpointUseCase:
         await websocket.send_json(envelope.model_dump())
 
     async def execute(self, websocket: WebSocket) -> None:
-        """Execute the main lifecycle of the WebSocket connection."""
+        """
+        Executes the specific business logic for the WebSocket connection lifecycle.
+
+        Args:
+            websocket (WebSocket): The active WebSocket connection.
+
+        Returns:
+            None
+        """
         await websocket.accept()
 
         redis_client = getattr(websocket.app.state, "redis_client", None)
@@ -140,9 +147,3 @@ class WebsocketEndpointUseCase:
             logger.exception("Unexpected WS error")
         finally:
             self.manager.disconnect(websocket)
-
-
-def get_websocket_endpoint_use_case(
-    manager: ConnectionManager = Depends(get_connection_manager),
-) -> WebsocketEndpointUseCase:
-    return WebsocketEndpointUseCase(manager=manager)

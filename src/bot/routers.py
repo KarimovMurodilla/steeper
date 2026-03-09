@@ -4,7 +4,13 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.bot.dependencies import get_bot_service
+from src.bot.dependencies import (
+    get_assign_bot_admin_use_case,
+    get_bot_service,
+    get_create_bot_use_case,
+    get_delete_bot_use_case,
+    get_update_bot_use_case,
+)
 from src.bot.enums import BotRole
 from src.bot.permissions.checker import require_bot_permission
 from src.bot.permissions.enum import BotPermission
@@ -16,22 +22,10 @@ from src.bot.schemas import (
     BotViewModel,
 )
 from src.bot.services.bot import BotService
-from src.bot.usecases.assign_bot_admin import (
-    AssignBotAdminUseCase,
-    get_assign_bot_admin_use_case,
-)
-from src.bot.usecases.create_bot import (
-    CreateBotUseCase,
-    get_create_bot_use_case,
-)
-from src.bot.usecases.delete_bot import (
-    DeleteBotUseCase,
-    get_delete_bot_use_case,
-)
-from src.bot.usecases.update_bot import (
-    UpdateBotUseCase,
-    get_update_bot_use_case,
-)
+from src.bot.usecases.assign_bot_admin import AssignBotAdminUseCase
+from src.bot.usecases.create_bot import CreateBotUseCase
+from src.bot.usecases.delete_bot import DeleteBotUseCase
+from src.bot.usecases.update_bot import UpdateBotUseCase
 from src.core.database.session import get_session
 from src.core.pagination import PaginatedResponse, PaginationParams
 from src.user.auth.dependencies import get_current_user

@@ -5,6 +5,7 @@ from fastapi import Request
 import pytest
 
 from src.core.errors import handlers
+from src.core.errors.enums import ErrorCode
 from src.core.errors.exceptions import (
     AccessForbiddenException,
     CoreException,
@@ -49,24 +50,28 @@ def _patch_response_logger(monkeypatch: pytest.MonkeyPatch) -> logging.Logger:
 def test_format_log_message_masks_sensitive_data() -> None:
     request = _build_request(headers=[(b"x-request-id", b"req-123")])
 
+    exc = CoreException(
+        code=ErrorCode.AUTH_NOT_AUTHENTICATED,
+        params={"token": "secret", "note": "safe"},
+        additional_info="token leaked",
+    )
     message = handlers.format_log_message(
         request,
-        "unauthorized",
-        "token leaked",
-        {"token": "secret", "note": "safe"},
+        exc,
         include_request_path=True,
     )
 
-    assert "[req-123] [Unauthorized] GET /v1/resource | token leaked" in message
-    assert "token=***" in message
-    assert "note='safe'" in message
+    assert "[req-123] [auth.not_authenticated] GET /v1/resource" in message
+    assert "'token': '***'" in message
+    assert "'note': 'safe'" in message
+    assert "token leaked" in message
 
 
 def test_format_log_message_truncates_long_text() -> None:
     request = _build_request()
     long_message = "a" * 600
 
-    message = handlers.format_log_message(request, "error", long_message)
+    message = handlers.format_log_message(request, Exception(long_message))
 
     assert message.endswith("...")
     assert message.count("a") == 497
@@ -82,10 +87,12 @@ async def test_core_exception_handler(caplog: pytest.LogCaptureFixture) -> None:
 
     assert response.status_code == 400
     assert json.loads(response.body) == {
-        "error": "Bad request",
-        "message": "failed to process",
+        "error": {
+            "code": "failed to process",
+            "message": "failed to process",
+        }
     }
-    assert any("Bad request" in record.message for record in caplog.records)
+    assert any("failed to process" in record.message for record in caplog.records)
 
 
 @pytest.mark.asyncio
@@ -100,11 +107,13 @@ async def test_filtering_error_handler_logs_warning(
 
     assert response.status_code == 400
     assert json.loads(response.body) == {
-        "error": "Filtering error",
-        "message": "invalid filter",
+        "error": {
+            "code": "invalid filter",
+            "message": "invalid filter",
+        }
     }
     assert any(
-        record.levelno == logging.WARNING and "Filtering error" in record.message
+        record.levelno == logging.WARNING and "invalid filter" in record.message
         for record in caplog.records
     )
 
@@ -190,16 +199,18 @@ async def test_other_handlers(
         monkeypatch.setattr(
             handlers,
             "format_log_message",
-            lambda req, err, msg, add=None, include_request_path=False: original(
-                req, err, msg, add, include_request_path=True
+            lambda req, exc_obj, include_request_path=False: original(
+                req, exc_obj, include_request_path=True
             ),
         )
 
     response = await handler_instance(request, exc_cls("failure"))
 
     assert response.status_code == status
-    assert json.loads(response.body) == {"error": error_type, "message": "failure"}
+    assert json.loads(response.body) == {
+        "error": {"code": "failure", "message": "failure"}
+    }
     assert any(
-        record.levelno == log_level and error_type in record.message
+        record.levelno == log_level and "failure" in record.message
         for record in caplog.records
     )

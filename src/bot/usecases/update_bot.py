@@ -1,17 +1,13 @@
 from uuid import UUID
 
-from fastapi import Depends
-
 from loggers import get_logger
 from src.bot.schemas import BotUpdateRequest, BotViewModel
-from src.core.database.session import get_unit_of_work
 from src.core.database.uow import ApplicationUnitOfWork, RepositoryProtocol
 from src.core.errors.enums import ErrorCode
 from src.core.errors.exceptions import CoreException, InstanceNotFoundException
 from src.core.utils.encryption import encrypt_token
 from src.core.utils.security import hash_token
 from src.integrations.telegram.bot.telegram_bot_api import TelegramBotAPIService
-from src.integrations.telegram.dependencies import get_telegram_bot_api_service
 from src.main.config import config
 
 logger = get_logger(__name__)
@@ -46,6 +42,21 @@ class UpdateBotUseCase:
         workspace_id: UUID,
         data: BotUpdateRequest,
     ) -> BotViewModel:
+        """
+        Executes the business logic for updating an existing Telegram Bot.
+
+        Args:
+            bot_id (UUID): The unique identifier of the bot.
+            workspace_id (UUID): The unique identifier of the workspace.
+            data (BotUpdateRequest): The payload containing updated bot details.
+
+        Returns:
+            BotViewModel: The updated bot details.
+
+        Raises:
+            InstanceNotFoundException: If the bot is not found in the workspace.
+            CoreException: If the new bot token is invalid.
+        """
         async with self.uow as uow:
             bot = await uow.bots.get_single(uow.session, id=bot_id)
             if not bot or bot.workspace_id != workspace_id:
@@ -85,10 +96,3 @@ class UpdateBotUseCase:
 
         logger.info(f"Bot updated successfully: {result.id}")
         return result
-
-
-def get_update_bot_use_case(
-    uow: ApplicationUnitOfWork[RepositoryProtocol] = Depends(get_unit_of_work),
-    tg_service: TelegramBotAPIService = Depends(get_telegram_bot_api_service),
-) -> UpdateBotUseCase:
-    return UpdateBotUseCase(uow=uow, tg_service=tg_service)

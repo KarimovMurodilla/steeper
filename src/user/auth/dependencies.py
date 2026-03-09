@@ -6,12 +6,20 @@ import jwt
 from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.core.database.session import get_session
+from src.core.database.session import get_session, get_unit_of_work
+from src.core.database.uow import ApplicationUnitOfWork, RepositoryProtocol
 from src.core.errors.enums import ErrorCode
 from src.core.errors.exceptions import UnauthorizedException
 from src.core.redis.dependencies import get_redis_client
 from src.main.config import config
 from src.user.auth.jwt_payload_schema import JWTPayload
+from src.user.auth.schemas import TelegramAuthRequest, TelegramAuthSource
+from src.user.auth.strategies.base import BaseAuthStrategy
+from src.user.auth.strategies.telegram.dto import TelegramUserData
+from src.user.auth.strategies.telegram.webapp import WebAppAuthStrategy
+from src.user.auth.strategies.telegram.widget import LoginWidgetAuthStrategy
+from src.user.auth.usecases.get_access_by_refresh import GetTokensByRefreshUserUseCase
+from src.user.auth.usecases.telegram_auth import TelegramAuthUseCase
 from src.user.models import User
 from src.user.repositories import UserRepository
 
@@ -223,3 +231,27 @@ async def verify_jti(token: str, redis_client: Redis) -> JWTPayload:
         )
 
     return payload_typed
+
+
+def get_tokens_by_refresh_user_use_case(
+    redis_client: Redis = Depends(get_redis_client),
+) -> GetTokensByRefreshUserUseCase:
+    return GetTokensByRefreshUserUseCase(redis_client=redis_client)
+
+
+def get_telegram_auth_use_case(
+    uow: ApplicationUnitOfWork[RepositoryProtocol] = Depends(get_unit_of_work),
+    redis_client: Redis = Depends(get_redis_client),
+) -> TelegramAuthUseCase:
+    strategies: dict[
+        TelegramAuthSource, BaseAuthStrategy[TelegramAuthRequest, TelegramUserData]
+    ] = {
+        TelegramAuthSource.WEBAPP: WebAppAuthStrategy(),
+        TelegramAuthSource.LOGIN_WIDGET: LoginWidgetAuthStrategy(),
+    }
+
+    return TelegramAuthUseCase(
+        uow=uow,
+        redis_client=redis_client,
+        strategies=strategies,
+    )

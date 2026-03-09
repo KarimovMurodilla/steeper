@@ -8,16 +8,12 @@ from fastapi import APIRouter, Depends, Query, status
 from src.bot.enums import BotRole
 from src.bot.permissions.checker import require_bot_permission
 from src.bot.permissions.enum import BotPermission
-from src.communication.chat.usecases.list_chats import (
-    ListChatsUseCase,
+from src.communication.chat.usecases.list_chats import ListChatsUseCase
+from src.communication.chat.usecases.list_messages import ListMessagesUseCase
+from src.communication.chat.usecases.send_message import SendMessageUseCase
+from src.communication.dependencies import (
     get_list_chats_use_case,
-)
-from src.communication.chat.usecases.list_messages import (
-    ListMessagesUseCase,
     get_list_messages_use_case,
-)
-from src.communication.chat.usecases.send_message import (
-    SendMessageUseCase,
     get_send_message_use_case,
 )
 from src.communication.schemas import (

@@ -1,4 +1,3 @@
-from fastapi import Depends
 import jwt
 from redis.asyncio import Redis
 
@@ -7,7 +6,6 @@ from src.core.errors.enums import ErrorCode
 from src.core.errors.exceptions import (
     PermissionDeniedException,
 )
-from src.core.redis.dependencies import get_redis_client
 from src.core.schemas import TokenModel
 from src.main.config import config
 from src.user.auth.jwt_payload_schema import JWTPayload
@@ -28,6 +26,19 @@ class GetTokensByRefreshUserUseCase:
         user: User,
         old_token_payload: JWTPayload,
     ) -> TokenModel:
+        """
+        Executes the specific business logic for refreshing user access tokens.
+
+        Args:
+            user (User): The authenticated user instance.
+            old_token_payload (JWTPayload): The payload of the old refresh token.
+
+        Returns:
+            TokenModel: The newly generated access and refresh tokens.
+
+        Raises:
+            PermissionDeniedException: If the user is blocked.
+        """
         if not user.is_active:
             logger.info(
                 "[RefreshTokens] Blocked user '%s' attempted refresh",
@@ -56,9 +67,3 @@ class GetTokensByRefreshUserUseCase:
             access_token=access_token,
             refresh_token=new_refresh_token,
         )
-
-
-def get_tokens_by_refresh_user_use_case(
-    redis_client: Redis = Depends(get_redis_client),
-) -> GetTokensByRefreshUserUseCase:
-    return GetTokensByRefreshUserUseCase(redis_client=redis_client)

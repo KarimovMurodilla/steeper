@@ -2,12 +2,9 @@ import time
 from typing import Any
 from uuid import UUID
 
-from fastapi import Depends
-
 from loggers import get_logger
 from src.communication.enums import ChatStatus, MessageType, SenderType
 from src.communication.schemas import TelegramUpdatePayload
-from src.core.database.session import get_unit_of_work
 from src.core.database.uow import ApplicationUnitOfWork, RepositoryProtocol
 from src.core.errors.enums import ErrorCode
 from src.core.errors.exceptions import (
@@ -125,6 +122,21 @@ class HandleWebhookUseCase:
     async def execute(
         self, bot_id: UUID, payload: TelegramUpdatePayload, secret_token: str
     ) -> SuccessResponse:
+        """
+        Executes the specific business logic for handling incoming webhooks.
+
+        Args:
+            bot_id (UUID): The unique identifier of the bot.
+            payload (TelegramUpdatePayload): The webhook payload from Telegram.
+            secret_token (str): The security token to validate the request.
+
+        Returns:
+            SuccessResponse: A success confirmation response.
+
+        Raises:
+            InstanceNotFoundException: If the bot is not found.
+            AccessForbiddenException: If the secret token is invalid.
+        """
         tg_msg = payload.message or payload.edited_message
 
         if not tg_msg:
@@ -220,9 +232,3 @@ class HandleWebhookUseCase:
         )
 
         return SuccessResponse(success=True)
-
-
-def get_handle_webhook_use_case(
-    uow: ApplicationUnitOfWork[RepositoryProtocol] = Depends(get_unit_of_work),
-) -> HandleWebhookUseCase:
-    return HandleWebhookUseCase(uow=uow)

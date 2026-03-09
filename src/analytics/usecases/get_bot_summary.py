@@ -2,10 +2,7 @@
 
 from uuid import UUID
 
-from fastapi import Depends
-
 from src.analytics.schemas import BotAnalyticsSummary
-from src.core.database.session import get_unit_of_work
 from src.core.database.uow.abstract import RepositoryProtocol
 from src.core.database.uow.application import ApplicationUnitOfWork
 
@@ -25,6 +22,15 @@ class GetBotAnalyticsSummaryUseCase:
         self.uow = uow
 
     async def execute(self, bot_id: UUID) -> BotAnalyticsSummary:
+        """
+        Executes the business logic for getting bot analytics summary.
+
+        Args:
+            bot_id (UUID): The unique identifier of the bot.
+
+        Returns:
+            BotAnalyticsSummary: Analytics summary object.
+        """
         async with self.uow as uow:
             users = await uow.telegram_users.count_by_bot(uow.session, bot_id)
             chats = await uow.chats.count_by_bot(uow.session, bot_id)
@@ -37,9 +43,3 @@ class GetBotAnalyticsSummaryUseCase:
             messages=messages,
             dau=dau,
         )
-
-
-def get_bot_analytics_summary_use_case(
-    uow: ApplicationUnitOfWork[RepositoryProtocol] = Depends(get_unit_of_work),
-) -> GetBotAnalyticsSummaryUseCase:
-    return GetBotAnalyticsSummaryUseCase(uow=uow)

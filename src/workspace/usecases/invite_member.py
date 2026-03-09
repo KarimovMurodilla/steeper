@@ -2,10 +2,7 @@
 
 from uuid import UUID
 
-from fastapi import Depends
-
 from loggers import get_logger
-from src.core.database.session import get_unit_of_work
 from src.core.database.uow.abstract import RepositoryProtocol
 from src.core.database.uow.application import ApplicationUnitOfWork
 from src.core.errors.enums import ErrorCode
@@ -43,6 +40,20 @@ class InviteMemberUseCase:
         workspace_id: UUID,
         data: InviteMemberRequest,
     ) -> InviteSuccessResponse:
+        """
+        Executes the business logic for inviting a user into a workspace.
+
+        Args:
+            workspace_id (UUID): The unique ID of the workspace.
+            data (InviteMemberRequest): Data needed to process the workspace invitation.
+
+        Returns:
+            InviteSuccessResponse: Summary response detailing success.
+
+        Raises:
+            InstanceNotFoundException: If the user is not found.
+            InstanceAlreadyExistsException: If the user is already a member.
+        """
         async with self.uow as uow:
             # 1. Resolve user by telegram_id
             user = await uow.users.get_single(uow.session, telegram_id=data.telegram_id)
@@ -75,9 +86,3 @@ class InviteMemberUseCase:
         logger.info("User %s invited to workspace %s", data.telegram_id, workspace_id)
 
         return InviteSuccessResponse(success=True)
-
-
-def get_invite_member_use_case(
-    uow: ApplicationUnitOfWork[RepositoryProtocol] = Depends(get_unit_of_work),
-) -> InviteMemberUseCase:
-    return InviteMemberUseCase(uow=uow)

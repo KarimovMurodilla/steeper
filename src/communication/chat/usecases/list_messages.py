@@ -2,13 +2,10 @@
 
 from uuid import UUID
 
-from fastapi import Depends
-
 from src.communication.schemas import (
     CursorPaginatedResponse,
     MessageListItemViewModel,
 )
-from src.core.database.session import get_unit_of_work
 from src.core.database.uow.abstract import RepositoryProtocol
 from src.core.database.uow.application import ApplicationUnitOfWork
 
@@ -28,6 +25,17 @@ class ListMessagesUseCase:
         limit: int = 50,
         cursor: UUID | None = None,
     ) -> CursorPaginatedResponse[MessageListItemViewModel]:
+        """
+        Executes the business logic for listing cursor-paginated messages of a chat.
+
+        Args:
+            chat_id (UUID): The unique identifier of the chat.
+            limit (int, optional): The maximum number of messages to fetch. Defaults to 50.
+            cursor (UUID | None, optional): The cursor for pagination. Defaults to None.
+
+        Returns:
+            CursorPaginatedResponse[MessageListItemViewModel]: The cursor-paginated items.
+        """
         async with self.uow as uow:
             messages = await uow.messages.get_cursor_paginated(
                 uow.session,
@@ -52,9 +60,3 @@ class ListMessagesUseCase:
             items=items,
             next_cursor=next_cursor,
         )
-
-
-def get_list_messages_use_case(
-    uow: ApplicationUnitOfWork[RepositoryProtocol] = Depends(get_unit_of_work),
-) -> ListMessagesUseCase:
-    return ListMessagesUseCase(uow=uow)

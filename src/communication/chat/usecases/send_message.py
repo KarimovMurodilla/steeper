@@ -2,14 +2,12 @@ import time
 from uuid import UUID
 
 from aiogram.types import Message
-from fastapi import Depends
 from sqlalchemy.orm import selectinload
 
 from loggers import get_logger
 from src.communication.enums import MessageType, SenderType
 from src.communication.models import Chat
 from src.communication.schemas import SendMessageRequest, SendMessageResponse
-from src.core.database.session import get_unit_of_work
 from src.core.database.uow.abstract import RepositoryProtocol
 from src.core.database.uow.application import ApplicationUnitOfWork
 from src.core.errors.enums import ErrorCode
@@ -19,7 +17,6 @@ from src.core.errors.exceptions import (
 )
 from src.core.utils.encryption import decrypt_token
 from src.integrations.telegram.bot.telegram_bot_api import TelegramBotAPIService
-from src.integrations.telegram.dependencies import get_telegram_bot_api_service
 from src.realtime.broker import broker, steeper_exchange
 from src.realtime.enums import EventType
 from src.realtime.schemas import WSChatMessageCreatedData, WSDownlinkEnvelope
@@ -52,6 +49,20 @@ class SendMessageUseCase:
         chat_id: UUID,
         data: SendMessageRequest,
     ) -> SendMessageResponse:
+        """
+        Executes the business logic for sending a message to a chat through the Telegram bot.
+
+        Args:
+            chat_id (UUID): The unique identifier of the chat.
+            data (SendMessageRequest): The content of the message to be sent.
+
+        Returns:
+            SendMessageResponse: The status of the sent message.
+
+        Raises:
+            InstanceNotFoundException: If the chat is not found.
+            InstanceProcessingException: If the message sending fails.
+        """
         async with self.uow as uow:
             chat = await uow.chats.get_single(
                 uow.session,
@@ -132,10 +143,3 @@ class SendMessageUseCase:
             telegram_message_id=tg_message_id,
             status="SENT",
         )
-
-
-def get_send_message_use_case(
-    uow: ApplicationUnitOfWork[RepositoryProtocol] = Depends(get_unit_of_work),
-    tg_bot_service: TelegramBotAPIService = Depends(get_telegram_bot_api_service),
-) -> SendMessageUseCase:
-    return SendMessageUseCase(uow=uow, tg_bot_service=tg_bot_service)

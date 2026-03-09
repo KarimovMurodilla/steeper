@@ -2,9 +2,9 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, WebSocket
 
+from src.realtime.dependencies import get_websocket_endpoint_use_case
 from src.realtime.usecases.websocket_endpoint import (
     WebsocketEndpointUseCase,
-    get_websocket_endpoint_use_case,
 )
 
 router = APIRouter()
