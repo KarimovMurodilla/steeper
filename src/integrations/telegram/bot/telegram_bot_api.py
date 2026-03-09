@@ -4,7 +4,7 @@ from aiogram import Bot
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
 from aiogram.exceptions import TelegramAPIError, TelegramUnauthorizedError
-from aiogram.types import BotCommand, LinkPreviewOptions, User
+from aiogram.types import BotCommand, LinkPreviewOptions, Message, User
 
 from loggers import get_logger
 
@@ -141,7 +141,7 @@ class TelegramBotAPIService:
         text: str,
         reply_to_message_id: int | None = None,
         disable_link_preview: bool = False,
-    ) -> dict[str, Any] | None:
+    ) -> Message | None:
         """
         Sends a text message to a specific chat.
 
@@ -167,8 +167,7 @@ class TelegramBotAPIService:
                 reply_to_message_id=reply_to_message_id,
                 link_preview_options=link_preview,
             )
-            message_dict = message.model_dump()
-            return cast(dict[str, Any], message_dict)
+            return message
         except TelegramAPIError as e:
             logger.error("Failed to send message to chat %s: %s", chat_id, e)
             return None

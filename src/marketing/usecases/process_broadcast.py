@@ -2,6 +2,7 @@ import asyncio
 from datetime import timedelta
 from uuid import UUID
 
+from aiogram.types import Message
 import sentry_sdk
 
 from loggers import get_logger
@@ -75,14 +76,14 @@ class ProcessBroadcastUseCase:
 
                 for attempt in range(MAX_RETRIES):
                     try:
-                        response = await self.tg_service.send_message(
+                        message = await self.tg_service.send_message(
                             token=token,
                             chat_id=user.tg_user_id,
                             text=broadcast.message_content,
                         )
-                        success = bool(response)
-                        if success and isinstance(response, dict):
-                            tg_message_id = response.get("message_id")
+                        success = bool(message)
+                        if success and isinstance(message, Message):
+                            tg_message_id = message.message_id
                         break
 
                     except Exception as e:

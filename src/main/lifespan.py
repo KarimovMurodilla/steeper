@@ -12,6 +12,7 @@ from src.core.redis.lifecycle import on_redis_shutdown, on_redis_startup
 from src.main.config import config
 from src.main.sentry import init_sentry
 from src.realtime.broker import broker as realtime_broker
+import src.realtime.consumers  # noqa: F401
 
 logger = logging.getLogger(__name__)
 

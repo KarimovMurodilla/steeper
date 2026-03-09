@@ -32,9 +32,7 @@ class WebsocketEndpointUseCase:
         websocket: WebSocket,
         redis_client: Redis,
     ) -> bool:
-        """
-        Wait for an 'authenticate' action and validate the JWT.
-        """
+        """Wait for an 'authenticate' action and validate the JWT."""
         try:
             raw = await asyncio.wait_for(
                 websocket.receive_json(),
@@ -78,7 +76,6 @@ class WebsocketEndpointUseCase:
         """Execute the main lifecycle of the WebSocket connection."""
         await websocket.accept()
 
-        # Resolve Redis client from app state
         redis_client = getattr(websocket.app.state, "redis_client", None)
         if redis_client is None:
             await self._send_error(websocket, 1011, "Service unavailable")
@@ -87,13 +84,11 @@ class WebsocketEndpointUseCase:
 
         redis_client = cast(Redis, redis_client)
 
-        # Authentication phase
         authenticated = await self._authenticate_ws(websocket, redis_client)
         if not authenticated:
             await websocket.close(code=1008, reason="Policy Violation")
             return
 
-        # Message loop
         try:
             while True:
                 raw = await websocket.receive_json()
@@ -106,26 +101,32 @@ class WebsocketEndpointUseCase:
 
                 if msg.action == WSAction.SUBSCRIBE:
                     if msg.chat_id:
-                        await self.manager.subscribe(websocket, msg.chat_id)
-                    else:
+                        await self.manager.subscribe_chat(websocket, msg.chat_id)
+                    if msg.bot_id:
+                        await self.manager.subscribe_bot(websocket, msg.bot_id)
+
+                    if not msg.chat_id and not msg.bot_id:
                         await self._send_error(
-                            websocket, 4001, "chat_id required for subscribe"
+                            websocket, 4001, "chat_id or bot_id required for subscribe"
                         )
 
                 elif msg.action == WSAction.UNSUBSCRIBE:
                     if msg.chat_id:
-                        await self.manager.unsubscribe(websocket, msg.chat_id)
-                    else:
+                        await self.manager.unsubscribe_chat(websocket, msg.chat_id)
+                    if msg.bot_id:
+                        await self.manager.unsubscribe_bot(websocket, msg.bot_id)
+
+                    if not msg.chat_id and not msg.bot_id:
                         await self._send_error(
-                            websocket, 4001, "chat_id required for unsubscribe"
+                            websocket,
+                            4001,
+                            "chat_id or bot_id required for unsubscribe",
                         )
 
                 elif msg.action == WSAction.PING:
                     await websocket.send_json({"action": "pong"})
 
                 elif msg.action == WSAction.TYPING:
-                    # Typing indicators are handled by publishing to the event bus
-                    # from the REST API side; here we simply acknowledge.
                     pass
 
                 else:

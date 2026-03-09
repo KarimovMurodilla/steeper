@@ -1,9 +1,8 @@
-"""Use case: send a message to a Telegram user via the bot's decrypted token."""
-
+import time
 from uuid import UUID
 
+from aiogram.types import Message
 from fastapi import Depends
-import httpx
 from sqlalchemy.orm import selectinload
 
 from loggers import get_logger
@@ -18,7 +17,11 @@ from src.core.errors.exceptions import (
     InstanceProcessingException,
 )
 from src.core.utils.encryption import decrypt_token
-from src.main.config import config
+from src.integrations.telegram.bot.telegram_bot_api import TelegramBotAPIService
+from src.integrations.telegram.dependencies import get_telegram_bot_api_service
+from src.realtime.broker import broker, steeper_exchange
+from src.realtime.enums import EventType
+from src.realtime.schemas import WSChatMessageCreatedData, WSDownlinkEnvelope
 
 logger = get_logger(__name__)
 
@@ -32,13 +35,16 @@ class SendMessageUseCase:
       2. Decrypt the bot token.
       3. Call Telegram sendMessage API via httpx.
       4. Persist the outgoing message record.
+      5. Publish event to Event Bus (RabbitMQ).
     """
 
     def __init__(
         self,
         uow: ApplicationUnitOfWork[RepositoryProtocol],
+        tg_bot_service: TelegramBotAPIService,
     ) -> None:
         self.uow = uow
+        self.tg_bot_service = tg_bot_service
 
     async def execute(
         self,
@@ -60,28 +66,18 @@ class SendMessageUseCase:
             bot_token = decrypt_token(chat.bot.token_encrypted)
             tg_chat_id = chat.telegram_user.tg_user_id
 
-            url = f"{config.telegram.TELEGRAM_API_BASE}/bot{bot_token}/sendMessage"
-            async with httpx.AsyncClient(timeout=10.0) as client:
-                response = await client.post(
-                    url,
-                    json={"chat_id": tg_chat_id, "text": data.text},
-                )
+            message = await self.tg_bot_service.send_message(
+                token=bot_token,
+                chat_id=tg_chat_id,
+                text=data.text,
+            )
 
-            if response.status_code != 200:
-                logger.error(
-                    "Telegram sendMessage failed: %s %s",
-                    response.status_code,
-                    response.text,
-                )
-                raise InstanceProcessingException(
-                    f"Telegram API error: {response.status_code}"
-                )
+            if bool(message) and isinstance(message, Message):
+                tg_message_id = message.message_id
+            else:
+                raise InstanceProcessingException("Failed to send message.")
 
-            tg_result = response.json().get("result", {})
-            tg_message_id: int = tg_result.get("message_id", 0)
-
-            # 4. Persist outgoing message
-            await uow.messages.create(
+            new_message = await uow.messages.create(
                 uow.session,
                 {
                     "chat_id": chat_id,
@@ -92,7 +88,44 @@ class SendMessageUseCase:
                     "metadata_info": {},
                 },
             )
+
+            await uow.session.flush()
+
             await uow.commit()
+
+        workspace_id = str(chat.bot.workspace_id)
+        bot_id_str = str(chat.bot_id)
+        chat_id_str = str(chat_id)
+
+        routing_key = f"workspace.{workspace_id}.bot.{bot_id_str}.chat.{chat_id_str}.message.created"
+
+        message_data = WSChatMessageCreatedData(
+            message_id=str(new_message.id),
+            tg_message_id=tg_message_id,
+            text=data.text,
+            sender_type=SenderType.ADMIN,
+        )
+        envelope = WSDownlinkEnvelope(
+            version=1,
+            event=EventType.CHAT_MESSAGE_CREATED,
+            workspace_id=workspace_id,
+            bot_id=bot_id_str,
+            chat_id=chat_id_str,
+            timestamp=int(time.time()),
+            data=message_data.model_dump(mode="json"),
+        )
+
+        try:
+            await broker.publish(
+                envelope.model_dump(mode="json"),
+                routing_key=routing_key,
+                exchange=steeper_exchange,
+            )
+            logger.debug(
+                "Published %s event to %s", EventType.CHAT_MESSAGE_CREATED, routing_key
+            )
+        except Exception as e:
+            logger.exception("Failed to publish message event to RabbitMQ: %s", e)
 
         return SendMessageResponse(
             telegram_message_id=tg_message_id,
@@ -102,6 +135,6 @@ class SendMessageUseCase:
 
 def get_send_message_use_case(
     uow: ApplicationUnitOfWork[RepositoryProtocol] = Depends(get_unit_of_work),
-    # tg_bot_service: TelegramBotService = Depends(get_tg_bot_service),
+    tg_bot_service: TelegramBotAPIService = Depends(get_telegram_bot_api_service),
 ) -> SendMessageUseCase:
-    return SendMessageUseCase(uow=uow)
+    return SendMessageUseCase(uow=uow, tg_bot_service=tg_bot_service)

@@ -23,7 +23,6 @@ class BotCreateRequest(Base):
 class BotUpdateRequest(Base):
     """Schema for updating bot settings."""
 
-    name: str | None = Field(None, min_length=1, max_length=100)
     token: str | None = Field(None, description="New token if rotation is needed")
     status: BotStatus | None = None
 

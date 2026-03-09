@@ -9,10 +9,9 @@ from src.realtime.dependencies import get_connection_manager
 logger = get_logger(__name__)
 
 # Dynamic queue — each WS gateway instance gets its own exclusive queue
-# so that every gateway receives every event (fan-out behaviour).
 events_queue = RabbitQueue(
-    name="",  # Empty name → server-generated unique queue name
-    routing_key="workspace.*.bot.*.chat.*.#",
+    name="",
+    routing_key="workspace.*.bot.*.#",
     exclusive=True,
     auto_delete=True,
 )
@@ -24,21 +23,24 @@ events_queue = RabbitQueue(
 )
 async def handle_realtime_event(body: dict[str, Any]) -> None:
     """
-    FastStream subscriber that listens for all chat-related events
-    on the steeper.events topic exchange.
-
-    Routing key format:
-        workspace.{workspace_id}.bot.{bot_id}.chat.{chat_id}.{event_type}
-
-    The chat_id is extracted from the message body (preferred) or
-    from the routing key as a fallback.
+    FastStream subscriber that listens for all chat-related events.
+    Broadcasts the event to clients subscribed to the specific chat OR the entire bot.
     """
     chat_id = body.get("chat_id")
+    bot_id = body.get("bot_id")
 
-    if not chat_id:
-        logger.warning("Received event without chat_id, skipping: %s", body)
+    if not chat_id and not bot_id:
+        logger.warning("Received event without chat_id or bot_id, skipping: %s", body)
         return
 
     manager = get_connection_manager()
-    await manager.broadcast_to_chat(str(chat_id), body)
-    logger.debug("Broadcasted event to chat %s", chat_id)
+
+    # Broadcast to both targets.
+    # Manager will ensure no duplicates are sent using a Set union.
+    await manager.broadcast(
+        chat_id=str(chat_id) if chat_id else None,
+        bot_id=str(bot_id) if bot_id else None,
+        message=body,
+    )
+
+    logger.debug("Broadcasted event to chat %s and bot %s", chat_id, bot_id)

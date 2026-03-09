@@ -12,6 +12,7 @@ from src.bot.schemas import (
     AdminBotRoleAssignRequest,
     AdminBotRoleViewModel,
     BotCreateRequest,
+    BotUpdateRequest,
     BotViewModel,
 )
 from src.bot.services.bot import BotService
@@ -22,6 +23,14 @@ from src.bot.usecases.assign_bot_admin import (
 from src.bot.usecases.create_bot import (
     CreateBotUseCase,
     get_create_bot_use_case,
+)
+from src.bot.usecases.delete_bot import (
+    DeleteBotUseCase,
+    get_delete_bot_use_case,
+)
+from src.bot.usecases.update_bot import (
+    UpdateBotUseCase,
+    get_update_bot_use_case,
 )
 from src.core.database.session import get_session
 from src.core.pagination import PaginatedResponse, PaginationParams
@@ -106,3 +115,45 @@ async def assign_bot_admin(
     Requires MANAGE_ROLES bot permission (ADMIN only).
     """
     return await use_case.execute(bot_id=bot_id, workspace_id=workspace_id, data=data)
+
+
+@router.patch(
+    "/{bot_id}",
+    response_model=BotViewModel,
+    status_code=status.HTTP_200_OK,
+)
+async def update_bot(
+    bot_id: UUID,
+    workspace_id: Annotated[UUID, Depends(get_current_workspace_id)],
+    data: BotUpdateRequest,
+    use_case: Annotated[UpdateBotUseCase, Depends(get_update_bot_use_case)],
+    _: Annotated[
+        BotRole,
+        Depends(require_bot_permission(BotPermission.EDIT_SETTINGS)),
+    ],
+) -> BotViewModel:
+    """
+    Update a bot's settings.
+    Requires EDIT_SETTINGS bot permission.
+    """
+    return await use_case.execute(bot_id=bot_id, workspace_id=workspace_id, data=data)
+
+
+@router.delete(
+    "/{bot_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def delete_bot(
+    bot_id: UUID,
+    workspace_id: Annotated[UUID, Depends(get_current_workspace_id)],
+    use_case: Annotated[DeleteBotUseCase, Depends(get_delete_bot_use_case)],
+    _: Annotated[
+        WorkspaceMember,
+        Depends(require_workspace_permission(WorkspacePermission.DELETE_BOT)),
+    ],
+) -> None:
+    """
+    Delete a bot from the workspace.
+    Requires DELETE_BOT workspace permission.
+    """
+    await use_case.execute(bot_id=bot_id, workspace_id=workspace_id)
