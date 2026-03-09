@@ -1,10 +1,14 @@
-from typing import Any, cast
-
 from aiogram import Bot
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
 from aiogram.exceptions import TelegramAPIError, TelegramUnauthorizedError
-from aiogram.types import BotCommand, LinkPreviewOptions, Message, User
+from aiogram.types import (
+    BotCommand,
+    LinkPreviewOptions,
+    Message,
+    User,
+    UserProfilePhotos,
+)
 
 from loggers import get_logger
 
@@ -65,7 +69,7 @@ class TelegramBotAPIService:
 
     async def get_profile_photos(
         self, token: str, user_id: int, offset: int = 0, limit: int = 10
-    ) -> dict[str, Any] | None:
+    ) -> UserProfilePhotos | None:
         """
         Retrieves the profile photos of a Telegram user.
 
@@ -83,8 +87,7 @@ class TelegramBotAPIService:
             photos = await bot.get_user_profile_photos(
                 user_id=user_id, offset=offset, limit=limit
             )
-            photos_dict = photos.model_dump()
-            return cast(dict[str, Any], photos_dict)
+            return photos
         except TelegramAPIError as e:
             logger.error("Failed to get profile photos for user %s: %s", user_id, e)
             return None
