@@ -80,7 +80,7 @@ class TelegramBotAPIService:
             limit: Maximum number of photos to be returned.
 
         Returns:
-            dict: The profile photos object as a dict, or None if failed.
+            UserProfilePhotos: The profile photos object, or None if failed.
         """
         bot = await self._get_bot_instance(token)
         try:
