@@ -5,6 +5,7 @@ from fastapi import Depends
 from loggers import get_logger
 from src.core.database.session import get_unit_of_work
 from src.core.database.uow import ApplicationUnitOfWork, RepositoryProtocol
+from src.core.errors.enums import ErrorCode
 from src.core.errors.exceptions import InstanceNotFoundException
 from src.core.utils.encryption import decrypt_token
 from src.integrations.telegram.bot.telegram_bot_api import TelegramBotAPIService
@@ -28,7 +29,7 @@ class DeleteBotUseCase:
         async with self.uow as uow:
             bot = await uow.bots.get_single(uow.session, id=bot_id)
             if not bot or bot.workspace_id != workspace_id:
-                raise InstanceNotFoundException("Bot not found in the workspace.")
+                raise InstanceNotFoundException(ErrorCode.BOT_NOT_FOUND)
 
             # decrypt token to remove webhook
             decrypted_token = decrypt_token(bot.token_encrypted)

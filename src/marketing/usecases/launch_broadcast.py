@@ -4,6 +4,7 @@ from uuid import UUID
 from celery_tasks.types import CeleryTask
 from loggers import get_logger
 from src.core.database.uow import ApplicationUnitOfWork, RepositoryProtocol
+from src.core.errors.enums import ErrorCode
 from src.core.errors.exceptions import (
     InstanceNotFoundException,
     InstanceProcessingException,
@@ -32,12 +33,10 @@ class LaunchBroadcastUseCase:
                 uow.session, id=broadcast_id, for_update=True
             )
             if not broadcast:
-                raise InstanceNotFoundException("Broadcast not found")
+                raise InstanceNotFoundException(ErrorCode.BROADCAST_NOT_FOUND)
 
             if broadcast.status not in _LAUNCHABLE_STATUSES:
-                raise InstanceProcessingException(
-                    f"Broadcast cannot be launched from status '{broadcast.status}'"
-                )
+                raise InstanceProcessingException(ErrorCode.BROADCAST_ALREADY_LAUNCHED)
 
             broadcast.status = BroadcastStatus.PROCESSING
             await uow.commit()

@@ -7,6 +7,7 @@ from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.database.session import get_session
+from src.core.errors.enums import ErrorCode
 from src.core.errors.exceptions import UnauthorizedException
 from src.core.redis.dependencies import get_redis_client
 from src.main.config import config
@@ -37,7 +38,7 @@ async def get_current_user(
         UnauthorizedException: If authentication fails
     """
     credentials_exception = UnauthorizedException(
-        "Could not validate credentials",
+        ErrorCode.AUTH_COULD_NOT_VALIDATE,
     )
 
     # verify_jti also validates the token and throws appropriate exceptions
@@ -79,7 +80,7 @@ async def get_access_by_refresh_token(
         UnauthorizedException: If authentication fails
     """
     credentials_exception = UnauthorizedException(
-        "Could not validate credentials",
+        ErrorCode.AUTH_COULD_NOT_VALIDATE,
     )
 
     # verify_jti also validates the token and throws appropriate exceptions
@@ -116,7 +117,7 @@ async def get_user_id_from_token(
 
     if not token:
         raise UnauthorizedException(
-            "Authentication token not found",
+            ErrorCode.AUTH_TOKEN_NOT_FOUND,
         )
 
     redis_client = await get_redis_client(request)
@@ -127,7 +128,7 @@ async def get_user_id_from_token(
         return identifier
     except KeyError:
         raise UnauthorizedException(
-            "Invalid or expired token",
+            ErrorCode.AUTH_INVALID_OR_EXPIRED_TOKEN,
         )
 
 
@@ -170,9 +171,9 @@ async def verify_jti(token: str, redis_client: Redis) -> JWTPayload:
         )
         payload_typed = cast(JWTPayload, payload)
     except jwt.ExpiredSignatureError:
-        raise UnauthorizedException("Token expired")
+        raise UnauthorizedException(ErrorCode.AUTH_TOKEN_EXPIRED)
     except jwt.PyJWTError:
-        raise UnauthorizedException("Invalid token")
+        raise UnauthorizedException(ErrorCode.AUTH_TOKEN_INVALID)
 
     try:
         jti = payload_typed["jti"]
@@ -180,7 +181,7 @@ async def verify_jti(token: str, redis_client: Redis) -> JWTPayload:
         user_id = payload_typed["sub"]
         session_id = payload_typed["session_id"]
     except KeyError:
-        raise UnauthorizedException("Invalid token structure")
+        raise UnauthorizedException(ErrorCode.AUTH_TOKEN_INVALID_STRUCTURE)
 
     # Check for reuse
     if mode == "refresh_token":
@@ -192,9 +193,7 @@ async def verify_jti(token: str, redis_client: Redis) -> JWTPayload:
             from src.user.auth.token_helpers import invalidate_all_user_sessions
 
             await invalidate_all_user_sessions(user_id, redis_client)
-            raise UnauthorizedException(
-                "Token reuse detected. All sessions invalidated."
-            )
+            raise UnauthorizedException(ErrorCode.AUTH_TOKEN_REUSE_DETECTED)
 
         # Token family validation
         family = payload_typed.get("family")
@@ -205,9 +204,7 @@ async def verify_jti(token: str, redis_client: Redis) -> JWTPayload:
                 from src.user.auth.token_helpers import invalidate_all_user_sessions
 
                 await invalidate_all_user_sessions(user_id, redis_client)
-                raise UnauthorizedException(
-                    "Token family invalidated. All sessions terminated."
-                )
+                raise UnauthorizedException(ErrorCode.AUTH_TOKEN_POTENTIAL_REUSE)
 
     # Check active tokens
     prefix = mode.replace("_token", "")
@@ -222,7 +219,7 @@ async def verify_jti(token: str, redis_client: Redis) -> JWTPayload:
 
     if not stored_jti or stored_jti_str != jti:
         raise UnauthorizedException(
-            "Token invalidated or expired",
+            ErrorCode.AUTH_INVALID_OR_EXPIRED_TOKEN,
         )
 
     return payload_typed

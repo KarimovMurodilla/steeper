@@ -7,6 +7,7 @@ from sqlalchemy.orm import Load
 
 from src.core.database.base import Base as SQLAlchemyBase
 from src.core.database.repositories import BaseRepository
+from src.core.errors.enums import ErrorCode
 from src.core.errors.exceptions import InstanceNotFoundException
 from src.core.pagination import (
     PaginatedResponse,
@@ -71,9 +72,7 @@ class BaseService(
         """Retrieve a single record matching the filters or raise a 404 error."""
         obj = await self.repository.get_single(session=session, eager=eager, **filters)
         if obj is None:
-            raise InstanceNotFoundException(
-                f"{self.repository.model.__name__} not found"
-            )
+            raise InstanceNotFoundException(ErrorCode.GENERAL_NOT_FOUND)
         return cast(ModelType, obj)
 
     async def get_list(

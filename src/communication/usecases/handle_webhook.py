@@ -9,6 +9,7 @@ from src.communication.enums import ChatStatus, MessageType, SenderType
 from src.communication.schemas import TelegramUpdatePayload
 from src.core.database.session import get_unit_of_work
 from src.core.database.uow import ApplicationUnitOfWork, RepositoryProtocol
+from src.core.errors.enums import ErrorCode
 from src.core.errors.exceptions import (
     AccessForbiddenException,
     InstanceNotFoundException,
@@ -141,13 +142,13 @@ class HandleWebhookUseCase:
 
             if not bot:
                 logger.warning("Webhook received for unknown bot_id: %s", bot_id)
-                raise InstanceNotFoundException("Bot not found")
+                raise InstanceNotFoundException(ErrorCode.BOT_NOT_FOUND)
 
             if bot.token_hash != secret_token:
                 logger.warning(
                     "Webhook received with invalid secret token for bot: %s", bot_id
                 )
-                raise AccessForbiddenException("Invalid secret token")
+                raise AccessForbiddenException(ErrorCode.AUTH_ACCESS_FORBIDDEN)
 
             if not bot.status == "active":
                 logger.info("Webhook skipped for disabled bot: %s", bot.id)

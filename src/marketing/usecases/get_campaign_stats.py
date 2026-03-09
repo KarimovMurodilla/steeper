@@ -2,6 +2,7 @@ from uuid import UUID
 
 from loggers import get_logger
 from src.core.database.uow import ApplicationUnitOfWork, RepositoryProtocol
+from src.core.errors.enums import ErrorCode
 from src.core.errors.exceptions import InstanceNotFoundException
 from src.marketing.enums import DeliveryStatus
 from src.marketing.schemas import BroadcastStatsResponse
@@ -22,7 +23,7 @@ class GetBroadcastStatsUseCase:
         async with self.uow as uow:
             broadcast = await uow.broadcasts.get_single(uow.session, id=broadcast_id)
             if not broadcast:
-                raise InstanceNotFoundException("Broadcast not found")
+                raise InstanceNotFoundException(ErrorCode.BROADCAST_NOT_FOUND)
 
             total = await uow.broadcast_deliveries.count(
                 uow.session, broadcast_id=broadcast_id

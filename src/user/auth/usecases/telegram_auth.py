@@ -6,6 +6,7 @@ from redis.asyncio import Redis
 from loggers import get_logger
 from src.core.database.session import get_unit_of_work
 from src.core.database.uow import ApplicationUnitOfWork, RepositoryProtocol
+from src.core.errors.enums import ErrorCode
 from src.core.errors.exceptions import (
     PermissionDeniedException,
     UnauthorizedException,
@@ -48,7 +49,7 @@ class TelegramAuthUseCase:
         strategy = self.strategies.get(data.source)
         if not strategy:
             logger.error(f"Unsupported auth source: {data.source}")
-            raise UnauthorizedException(f"Unsupported auth source: {data.source}")
+            raise UnauthorizedException(ErrorCode.AUTH_COULD_NOT_VALIDATE)
 
         user_data = strategy.verify(data)
 
@@ -60,7 +61,7 @@ class TelegramAuthUseCase:
 
             if not user.is_active:
                 logger.error(f"User is blocked: {user.id}")
-                raise PermissionDeniedException("User is blocked")
+                raise PermissionDeniedException(ErrorCode.USER_BLOCKED)
 
             token_data = {"sub": str(user.id)}
             session_id = str(uuid4())

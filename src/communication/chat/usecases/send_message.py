@@ -12,6 +12,7 @@ from src.communication.schemas import SendMessageRequest, SendMessageResponse
 from src.core.database.session import get_unit_of_work
 from src.core.database.uow.abstract import RepositoryProtocol
 from src.core.database.uow.application import ApplicationUnitOfWork
+from src.core.errors.enums import ErrorCode
 from src.core.errors.exceptions import (
     InstanceNotFoundException,
     InstanceProcessingException,
@@ -61,7 +62,7 @@ class SendMessageUseCase:
                 id=chat_id,
             )
             if not chat:
-                raise InstanceNotFoundException("Chat not found.")
+                raise InstanceNotFoundException(ErrorCode.CHAT_NOT_FOUND)
 
             bot_token = decrypt_token(chat.bot.token_encrypted)
             tg_chat_id = chat.telegram_user.tg_user_id
@@ -75,7 +76,7 @@ class SendMessageUseCase:
             if bool(message) and isinstance(message, Message):
                 tg_message_id = message.message_id
             else:
-                raise InstanceProcessingException("Failed to send message.")
+                raise InstanceProcessingException(ErrorCode.MESSAGE_SEND_FAILED)
 
             new_message = await uow.messages.create(
                 uow.session,

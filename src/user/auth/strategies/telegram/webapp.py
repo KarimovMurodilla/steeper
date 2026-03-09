@@ -5,6 +5,7 @@ import time
 from urllib.parse import parse_qsl
 
 from src.core.database.uow import ApplicationUnitOfWork, RepositoryProtocol
+from src.core.errors.enums import ErrorCode
 from src.core.errors.exceptions import UnauthorizedException
 from src.main.config import config
 from src.user.auth.schemas import TelegramAuthRequest
@@ -18,17 +19,17 @@ class WebAppAuthStrategy(BaseAuthStrategy[TelegramAuthRequest, TelegramUserData]
 
     def verify(self, data: TelegramAuthRequest) -> TelegramUserData:
         if not data.init_data:
-            raise UnauthorizedException("init_data is required for WebApp auth")
+            raise UnauthorizedException(ErrorCode.AUTH_TELEGRAM_DATA_REQUIRED)
 
         parsed_data = dict(parse_qsl(data.init_data, keep_blank_values=True))
         if "hash" not in parsed_data:
-            raise UnauthorizedException("INVALID_TELEGRAM_SIGNATURE")
+            raise UnauthorizedException(ErrorCode.AUTH_TELEGRAM_HASH_MISMATCH)
 
         received_hash = parsed_data.pop("hash")
         auth_date = int(parsed_data.get("auth_date", 0))
 
         if time.time() - auth_date > 86400:
-            raise UnauthorizedException("TELEGRAM_AUTH_EXPIRED")
+            raise UnauthorizedException(ErrorCode.AUTH_TELEGRAM_DATA_OUTDATED)
 
         data_check_string = "\n".join(
             f"{k}={v}" for k, v in sorted(parsed_data.items())
@@ -43,7 +44,7 @@ class WebAppAuthStrategy(BaseAuthStrategy[TelegramAuthRequest, TelegramUserData]
         ).hexdigest()
 
         if not hmac.compare_digest(calculated_hash, received_hash):
-            raise UnauthorizedException("INVALID_TELEGRAM_SIGNATURE")
+            raise UnauthorizedException(ErrorCode.AUTH_TELEGRAM_HASH_MISMATCH)
 
         user_dict = json.loads(parsed_data.get("user", "{}"))
         return TelegramUserData(

@@ -3,6 +3,7 @@ import hmac
 import time
 
 from src.core.database.uow import ApplicationUnitOfWork, RepositoryProtocol
+from src.core.errors.enums import ErrorCode
 from src.core.errors.exceptions import (
     PermissionDeniedException,
     UnauthorizedException,
@@ -20,10 +21,10 @@ class LoginWidgetAuthStrategy(BaseAuthStrategy[TelegramAuthRequest, TelegramUser
     def verify(self, data: TelegramAuthRequest) -> TelegramUserData:
         login_data = data.telegram_login
         if not login_data:
-            raise UnauthorizedException("telegram_login is required for Widget auth")
+            raise UnauthorizedException(ErrorCode.AUTH_TELEGRAM_DATA_REQUIRED)
 
         if time.time() - login_data.auth_date > 86400:
-            raise UnauthorizedException("TELEGRAM_AUTH_EXPIRED")
+            raise UnauthorizedException(ErrorCode.AUTH_TELEGRAM_DATA_OUTDATED)
 
         data_dict = login_data.model_dump(exclude={"hash"}, exclude_none=True)
         received_hash = login_data.hash
@@ -38,7 +39,7 @@ class LoginWidgetAuthStrategy(BaseAuthStrategy[TelegramAuthRequest, TelegramUser
         ).hexdigest()
 
         if not hmac.compare_digest(calculated_hash, received_hash):
-            raise UnauthorizedException("INVALID_TELEGRAM_SIGNATURE")
+            raise UnauthorizedException(ErrorCode.AUTH_TELEGRAM_HASH_MISMATCH)
 
         return TelegramUserData(
             telegram_id=login_data.id,
@@ -59,13 +60,13 @@ class LoginWidgetAuthStrategy(BaseAuthStrategy[TelegramAuthRequest, TelegramUser
         )
 
         if not user:
-            raise PermissionDeniedException("USER_NOT_ALLOWED")
+            raise PermissionDeniedException(ErrorCode.AUTH_PERMISSION_DENIED)
 
         has_workspaces = await uow.workspace_members.exists(
             uow.session, user_id=user.id
         )
         if not has_workspaces:
-            raise PermissionDeniedException("USER_NOT_ALLOWED")
+            raise PermissionDeniedException(ErrorCode.AUTH_PERMISSION_DENIED)
 
         user.first_name = user_data.first_name
         user.username = user_data.username

@@ -1,3 +1,4 @@
+from collections import defaultdict
 from collections.abc import Awaitable, Callable
 from typing import Any, TypeVar, cast
 
@@ -17,13 +18,25 @@ from src.core.errors.exceptions import (
     InstanceAlreadyExistsException,
     InstanceNotFoundException,
     InstanceProcessingException,
+    PayloadTooLargeException,
+    TooManyRequestsException,
 )
+from src.core.i18n.enums import LanguageType
+from src.core.i18n.errors.en import ERROR_TEXTS_EN
+from src.core.i18n.errors.ru import ERROR_TEXTS_RU
+from src.core.i18n.errors.uz import ERROR_TEXTS_UZ
+from src.core.i18n.utils import parse_language
 
 response_logger = get_logger("app.request.error_response", plain_format=True)
 
 # Type for exception handler
 ExcType = TypeVar("ExcType", bound=Exception)
 HandlerCallable = Callable[[Request, Exception], Awaitable[Response]]
+_I18N_ERRORS_MAP = {
+    LanguageType.RU: ERROR_TEXTS_RU,
+    LanguageType.UZ: ERROR_TEXTS_UZ,
+    LanguageType.EN: ERROR_TEXTS_EN,
+}
 
 
 def as_exception_handler(handler: Any) -> HandlerCallable:
@@ -40,255 +53,301 @@ def as_exception_handler(handler: Any) -> HandlerCallable:
     return cast(HandlerCallable, handler.__call__)
 
 
-def format_error_response(error_type: str, message: str | None) -> dict[str, Any]:
+def mask_sensitive_data(data: dict[str, Any]) -> dict[str, Any]:
+    """Helper to mask sensitive keys in dictionaries."""
+    sensitive_keys = {
+        "authorization",
+        "token",
+        "password",
+        "secret",
+        "api_key",
+        "api-key",
+        "access_token",
+    }
+    masked = {}
+    for k, v in data.items():
+        if k.lower() in sensitive_keys:
+            masked[k] = "***"
+        else:
+            masked[k] = v
+    return masked
+
+
+def format_error_response(code: str, message: str) -> dict[str, Any]:
     """
     Format error response content for JSONResponse
 
     Args:
-        error_type: Type of error (e.g., "Unauthorized", "Instance not found")
+        code: Type of error (e.g., "Unauthorized", "Instance not found")
         message: Detailed error message
 
     Returns:
         Dictionary with error information
     """
-    return {
-        "error": error_type,
-        "message": message or "No additional details available",
-    }
+    return {"error": {"code": code, "message": message}}
 
 
 def format_log_message(
     request: Request,
-    error_type: str,
-    message: str | None,
-    additional_info: dict[str, Any] | None = None,
+    exc: Exception,
     include_request_path: bool = False,
 ) -> str:
     """
-    Format error message for logging
-
-    Args:
-        request: FastAPI Request object
-        error_type: Type of error
-        message: Error message
-        additional_info: Additional context information for logs only (not shown to clients)
-        include_request_path: Include request path and method in the log message
-
-    Returns:
-        Formatted log message
+    Format error message for logging with support for CoreException,
+    ValidationErrors, and standard Python Exceptions.
     """
-    # Normalize message text and length
-    raw_msg = message or "No additional details available"
-    msg = " ".join(raw_msg.split())
-    if len(msg) > 500:
-        msg = msg[:497] + "..."
-
-    # Safely capitalize an error type
-    et = (error_type or "").strip()
-    err = (et[:1].upper() + et[1:]) if et else "Error"
-
     request_id = request.headers.get("x-request-id") or getattr(
         getattr(request, "state", object()), "request_id", None
     )
-
     prefix = f"[{request_id}] " if request_id else ""
-    log_msg = f"{prefix}[{err}] {msg}"
+
+    code = "internal_error"
+    params: dict[str, Any] = {}
+    dev_info: dict[str, Any] = {}
+    raw_message = ""
+
+    if isinstance(exc, CoreException):
+        code = exc.code or "core_error"
+        params = exc.params or {}
+        dev_info = exc.additional_info or {}
+
+    elif isinstance(exc, (RequestValidationError, ValidationError)):
+        code = "validation_error"
+        dev_info = {"validation_errors": exc.errors()}
+
+    else:
+        code = exc.__class__.__name__
+        raw_message = str(exc)
+
+    log_msg = f"{prefix}[{code}]"
 
     if include_request_path:
         endpoint = request.url.path
         method = request.method
-        log_msg = f"{prefix}[{err}] {method} {endpoint} | {msg}"
+        log_msg = f"{prefix}[{code}] {method} {endpoint}"
 
-    if additional_info:
-        sensitive = {
-            "authorization",
-            "token",
-            "password",
-            "secret",
-            "api_key",
-            "api-key",
-        }
+    if raw_message:
+        log_msg += f" | Msg: {raw_message}"
 
-        def mask(k: str, v: Any) -> str:
-            return "***" if k.lower() in sensitive else repr(v)
+    if params:
+        safe_params = mask_sensitive_data(params)
+        log_msg += f" | Params: {safe_params}"
 
-        additional_str = ", ".join(
-            f"{k}={mask(k, additional_info[k])}" for k in sorted(additional_info)
+    if dev_info:
+        safe_info = (
+            mask_sensitive_data(dev_info) if isinstance(dev_info, dict) else dev_info
         )
-        log_msg = f"{log_msg} | Additional info: {additional_str}"
+        log_msg += f" | DevInfo: {safe_info}"
 
     return log_msg
 
 
+# ----- I18n Handler Mixin -----
+class I18nExceptionHandlerMixin:
+    def get_localized_message(self, request: Request, exc: CoreException) -> str:
+        accept_language = request.headers.get("Accept-Language")
+        language = parse_language(accept_language)
+
+        translations = _I18N_ERRORS_MAP.get(language, ERROR_TEXTS_RU)
+        template = translations.get(exc.code, str(exc.code))
+
+        safe_params = defaultdict(str, exc.params)
+        try:
+            return template.format(**safe_params)
+        except Exception:
+            return template
+
+
 # ----- Infrastructure error handler ----- #
-class InfrastructureExceptionHandler:
+class InfrastructureExceptionHandler(I18nExceptionHandlerMixin):
     async def __call__(
         self, request: Request, exc: InfrastructureException
     ) -> JSONResponse:
-        error_type = "Infrastructure error"
-        log_msg = format_log_message(
-            request, error_type, exc.message, exc.additional_info
-        )
+        log_msg = format_log_message(request, exc)
         response_logger.error(log_msg)
+
+        message = self.get_localized_message(request, exc)
+
         sentry_sdk.capture_exception(exc)
         return JSONResponse(
             status_code=500,
-            content=format_error_response(error_type, exc.message),
+            content=format_error_response(exc.code, message),
         )
 
 
 # ----- Validation Handlers ----- #
-class RequestValidationExceptionHandler:
+class RequestValidationExceptionHandler(I18nExceptionHandlerMixin):
     async def __call__(
         self, request: Request, exc: RequestValidationError
     ) -> JSONResponse:
-        error_type = "Request validation error"
         safe_detail = jsonable_encoder(exc.errors())
-        log_msg = format_log_message(
-            request,
-            error_type,
-            str(safe_detail),
-            include_request_path=True,
-        )
+        log_msg = format_log_message(request, exc, include_request_path=True)
         response_logger.debug(log_msg)
         return JSONResponse(status_code=422, content={"detail": safe_detail})
 
 
-class ValidationErrorExceptionHandler:
+class ValidationErrorExceptionHandler(I18nExceptionHandlerMixin):
     async def __call__(self, request: Request, exc: ValidationError) -> JSONResponse:
-        error_type = "Backend validation error"
-        errors = exc.errors()
-        safe_detail = jsonable_encoder(errors)
-        log_msg = format_log_message(
-            request,
-            error_type,
-            str(safe_detail),
-            include_request_path=True,
-        )
+        log_msg = format_log_message(request, exc, include_request_path=True)
         response_logger.error(log_msg)
         sentry_sdk.capture_exception(exc)
         return JSONResponse(status_code=500, content={"detail": "Unexpected error"})
 
 
 # ----- Core Error Handlers ----- #
-class CoreExceptionHandler:
+class CoreExceptionHandler(I18nExceptionHandlerMixin):
     async def __call__(self, request: Request, exc: CoreException) -> JSONResponse:
-        error_type = "Bad request"
-        log_msg = format_log_message(
-            request, error_type, exc.message, exc.additional_info
-        )
+        log_msg = format_log_message(request, exc)
         response_logger.info(log_msg)
+
+        message = self.get_localized_message(request, exc)
+
         return JSONResponse(
             status_code=400,
-            content=format_error_response(error_type, exc.message),
+            content=format_error_response(exc.code, message),
         )
 
 
-class InstanceNotFoundExceptionHandler:
+class InstanceNotFoundExceptionHandler(I18nExceptionHandlerMixin):
     async def __call__(
         self, request: Request, exc: InstanceNotFoundException
     ) -> JSONResponse:
-        error_type = "Instance not found"
-        log_msg = format_log_message(
-            request, error_type, exc.message, exc.additional_info
-        )
+        log_msg = format_log_message(request, exc)
         response_logger.info(log_msg)
+
+        message = self.get_localized_message(request, exc)
+
         return JSONResponse(
             status_code=404,
-            content=format_error_response(error_type, exc.message),
+            content=format_error_response(exc.code, message),
         )
 
 
-class InstanceAlreadyExistsExceptionHandler:
+class InstanceAlreadyExistsExceptionHandler(I18nExceptionHandlerMixin):
     async def __call__(
         self, request: Request, exc: InstanceAlreadyExistsException
     ) -> JSONResponse:
-        error_type = "Instance already exists"
-        log_msg = format_log_message(
-            request, error_type, exc.message, exc.additional_info
-        )
+        log_msg = format_log_message(request, exc)
         response_logger.info(log_msg)
+
+        message = self.get_localized_message(request, exc)
+
         return JSONResponse(
             status_code=409,
-            content=format_error_response(error_type, exc.message),
+            content=format_error_response(exc.code, message),
         )
 
 
-class InstanceProcessingExceptionHandler:
+class InstanceProcessingExceptionHandler(I18nExceptionHandlerMixin):
     async def __call__(
         self, request: Request, exc: InstanceProcessingException
     ) -> JSONResponse:
-        error_type = "Instance processing error"
-        log_msg = format_log_message(
-            request, error_type, exc.message, exc.additional_info
-        )
+        log_msg = format_log_message(request, exc)
         response_logger.info(log_msg)
+
+        message = self.get_localized_message(request, exc)
+
         return JSONResponse(
             status_code=400,
-            content=format_error_response(error_type, exc.message),
+            content=format_error_response(exc.code, message),
         )
 
 
-class FilteringErrorHandler:
+class PayloadTooLargeExceptionHandler(I18nExceptionHandlerMixin):
+    async def __call__(
+        self, request: Request, exc: PayloadTooLargeException
+    ) -> JSONResponse:
+        log_msg = format_log_message(request, exc)
+        response_logger.info(log_msg)
+
+        message = self.get_localized_message(request, exc)
+
+        return JSONResponse(
+            status_code=413,
+            content=format_error_response(exc.code, message),
+        )
+
+
+class FilteringErrorHandler(I18nExceptionHandlerMixin):
     async def __call__(self, request: Request, exc: FilteringError) -> JSONResponse:
-        error_type = "Filtering error"
-        log_msg = format_log_message(
-            request, error_type, exc.message, exc.additional_info
-        )
+        log_msg = format_log_message(request, exc)
         response_logger.warning(log_msg)
+
+        message = self.get_localized_message(request, exc)
+
         return JSONResponse(
             status_code=400,
-            content=format_error_response(error_type, exc.message),
+            content=format_error_response(exc.code, message),
         )
 
 
-class UnauthorizedExceptionHandler:
+class UnauthorizedExceptionHandler(I18nExceptionHandlerMixin):
     async def __call__(self, request: Request, exc: CoreException) -> JSONResponse:
-        error_type = "Unauthorized"
-        log_msg = format_log_message(
-            request, error_type, exc.message, exc.additional_info
-        )
+        log_msg = format_log_message(request, exc)
         response_logger.warning(log_msg)
+
+        message = self.get_localized_message(request, exc)
+
         return JSONResponse(
             status_code=401,
-            content=format_error_response(error_type, exc.message),
+            content=format_error_response(exc.code, message),
         )
 
 
-class AccessForbiddenExceptionHandler:
+class AccessForbiddenExceptionHandler(I18nExceptionHandlerMixin):
     async def __call__(self, request: Request, exc: CoreException) -> JSONResponse:
-        error_type = "Forbidden"
-        log_msg = format_log_message(
-            request, error_type, exc.message, exc.additional_info
-        )
+        log_msg = format_log_message(request, exc)
         response_logger.warning(log_msg)
+
+        message = self.get_localized_message(request, exc)
+
         return JSONResponse(
             status_code=403,
-            content=format_error_response(error_type, exc.message),
+            content=format_error_response(exc.code, message),
         )
 
 
-class NotAcceptableExceptionHandler:
+class NotAcceptableExceptionHandler(I18nExceptionHandlerMixin):
     async def __call__(self, request: Request, exc: CoreException) -> JSONResponse:
-        error_type = "Not Acceptable"
-        log_msg = format_log_message(
-            request, error_type, exc.message, exc.additional_info
-        )
+        log_msg = format_log_message(request, exc)
         response_logger.info(log_msg)
+
+        message = self.get_localized_message(request, exc)
+
         return JSONResponse(
             status_code=406,
-            content=format_error_response(error_type, exc.message),
+            content=format_error_response(exc.code, message),
         )
 
 
-class PermissionDeniedExceptionHandler:
+class PermissionDeniedExceptionHandler(I18nExceptionHandlerMixin):
     async def __call__(self, request: Request, exc: CoreException) -> JSONResponse:
-        error_type = "Permission Denied"
-        log_msg = format_log_message(
-            request, error_type, exc.message, exc.additional_info
-        )
+        log_msg = format_log_message(request, exc)
         response_logger.warning(log_msg)
+
+        message = self.get_localized_message(request, exc)
+
         return JSONResponse(
             status_code=403,
-            content=format_error_response(error_type, exc.message),
+            content=format_error_response(exc.code, message),
+        )
+
+
+class TooManyRequestsExceptionHandler(I18nExceptionHandlerMixin):
+    async def __call__(
+        self, request: Request, exc: TooManyRequestsException
+    ) -> JSONResponse:
+        log_msg = format_log_message(request, exc)
+        response_logger.info(log_msg)
+
+        message = self.get_localized_message(request, exc)
+
+        headers = {}
+        if exc.retry_after:
+            headers["Retry-After"] = str(exc.retry_after)
+
+        return JSONResponse(
+            status_code=429,
+            content=format_error_response(exc.code, message),
+            headers=headers,
         )

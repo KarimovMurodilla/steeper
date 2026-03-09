@@ -5,6 +5,7 @@ from src.communication.enums import ChatStatus, MessageType, SenderType
 from src.communication.schemas import BotMessagePayload
 from src.core.database.session import get_unit_of_work
 from src.core.database.uow import ApplicationUnitOfWork, RepositoryProtocol
+from src.core.errors.enums import ErrorCode
 from src.core.errors.exceptions import InstanceNotFoundException
 from src.core.schemas import SuccessResponse
 
@@ -35,7 +36,7 @@ class LogBotMessageUseCase:
                 logger.warning(
                     "Webhook received for unknown token hash: %s", token_hash
                 )
-                raise InstanceNotFoundException("Bot not found")
+                raise InstanceNotFoundException(ErrorCode.BOT_NOT_FOUND)
 
             if not bot.status == "active":
                 logger.info("Webhook skipped for disabled bot: %s", bot.id)
@@ -49,7 +50,7 @@ class LogBotMessageUseCase:
                 logger.warning(
                     "Webhook received for unknown Telegram user: %s", payload.chat_id
                 )
-                raise InstanceNotFoundException("Telegram user not found")
+                raise InstanceNotFoundException(ErrorCode.AUTH_TELEGRAM_USER_NOT_FOUND)
 
             chat = await uow.chats.get_single(
                 session=uow.session, bot_id=bot.id, telegram_user_id=tg_user.id

@@ -3,6 +3,7 @@ from typing import Annotated
 
 from fastapi import Depends
 
+from src.core.errors.enums import ErrorCode
 from src.core.errors.exceptions import PermissionDeniedException
 from src.workspace.dependencies import get_current_workspace_member
 from src.workspace.models import WorkspaceMember
@@ -25,9 +26,7 @@ def require_workspace_permission(
         allowed_permissions = WORKSPACE_ROLE_PERMISSIONS.get(member.role, set())
 
         if required_permission not in allowed_permissions:
-            raise PermissionDeniedException(
-                f"Workspace permission denied: {required_permission.value}"
-            )
+            raise PermissionDeniedException(ErrorCode.AUTH_PERMISSION_DENIED)
 
         return member
 

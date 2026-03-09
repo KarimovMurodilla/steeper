@@ -10,6 +10,7 @@ from typing import cast
 
 from redis.asyncio import Redis
 
+from src.core.errors.enums import ErrorCode
 from src.core.errors.exceptions import UnauthorizedException
 from src.main.config import config
 from src.user.auth.jwt_payload_schema import JWTPayload
@@ -58,7 +59,7 @@ async def validate_token_family(
     """
     if not family_id:
         await invalidate_all_user_sessions(user_id, redis_client)
-        raise UnauthorizedException("Invalid token structure")
+        raise UnauthorizedException(ErrorCode.AUTH_TOKEN_INVALID_STRUCTURE)
 
     family_key = f"family:{user_id}:{family_id}"
     family_exists = await redis_client.exists(family_key)
@@ -66,7 +67,7 @@ async def validate_token_family(
     if not family_exists:
         # Family doesn't exist - possible token reuse attempt
         await invalidate_all_user_sessions(user_id, redis_client)
-        raise UnauthorizedException("Token has been invalidated due to potential reuse")
+        raise UnauthorizedException(ErrorCode.AUTH_TOKEN_POTENTIAL_REUSE)
 
     return None
 
@@ -94,11 +95,11 @@ async def validate_token_structure(
 
         if not jti or not family_id:
             await invalidate_all_user_sessions(user_id, redis_client)
-            raise UnauthorizedException("Invalid token structure")
+            raise UnauthorizedException(ErrorCode.AUTH_TOKEN_INVALID_STRUCTURE)
 
         return user_id, session_id, jti, family_id
     except KeyError:
-        raise UnauthorizedException("Invalid token structure")
+        raise UnauthorizedException(ErrorCode.AUTH_TOKEN_INVALID_STRUCTURE)
 
 
 async def execute_token_rotation(
@@ -146,9 +147,9 @@ async def execute_token_rotation(
     if result == "REUSED":
         # Token reuse detected!
         await invalidate_all_user_sessions(user_id, redis_client)
-        raise UnauthorizedException("Token reuse detected. All sessions invalidated.")
+        raise UnauthorizedException(ErrorCode.AUTH_TOKEN_REUSE_DETECTED)
     elif result == "INVALID":
         await invalidate_all_user_sessions(user_id, redis_client)
-        raise UnauthorizedException("Token invalidated or expired")
+        raise UnauthorizedException(ErrorCode.AUTH_INVALID_OR_EXPIRED_TOKEN)
 
     return result

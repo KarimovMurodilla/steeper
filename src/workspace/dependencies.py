@@ -5,6 +5,7 @@ from fastapi import Depends, Header
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.database.session import get_session
+from src.core.errors.enums import ErrorCode
 from src.core.errors.exceptions import PermissionDeniedException
 from src.user.auth.dependencies import get_current_user
 from src.user.models import User
@@ -42,9 +43,7 @@ async def get_current_workspace_member(
     )
 
     if not member:
-        raise PermissionDeniedException(
-            "You are not a member of this workspace or it does not exist."
-        )
+        raise PermissionDeniedException(ErrorCode.WORKSPACE_ACCESS_DENIED)
 
     return member
 

@@ -10,6 +10,7 @@ from src.bot.repositories.admin_bot_role import AdminBotRoleRepository
 from src.bot.repositories.bot import BotRepository
 from src.bot.services.bot import BotService
 from src.core.database.session import get_session
+from src.core.errors.enums import ErrorCode
 from src.core.errors.exceptions import (
     AccessForbiddenException,
     InstanceNotFoundException,
@@ -31,7 +32,7 @@ async def get_current_bot_role(
 
     bot = await session.get(Bot, bot_id)
     if not bot:
-        raise InstanceNotFoundException("Bot not found")
+        raise InstanceNotFoundException(ErrorCode.BOT_NOT_FOUND)
 
     is_system_owner = (
         member.role == WorkspaceRole.OWNER and member.workspace_id == bot.workspace_id
@@ -45,7 +46,7 @@ async def get_current_bot_role(
     )
 
     if not role:
-        raise AccessForbiddenException("You do not have access to this bot")
+        raise AccessForbiddenException(ErrorCode.AUTH_ACCESS_FORBIDDEN)
 
     return role
 

@@ -9,6 +9,7 @@ from src.bot.schemas import AdminBotRoleAssignRequest, AdminBotRoleViewModel
 from src.core.database.session import get_unit_of_work
 from src.core.database.uow.abstract import RepositoryProtocol
 from src.core.database.uow.application import ApplicationUnitOfWork
+from src.core.errors.enums import ErrorCode
 from src.core.errors.exceptions import (
     InstanceAlreadyExistsException,
     InstanceNotFoundException,
@@ -43,15 +44,13 @@ class AssignBotAdminUseCase:
         async with self._uow as uow:
             user = await uow.users.get_single(uow.session, id=data.user_id)
             if not user:
-                raise InstanceNotFoundException(
-                    f"User with ID '{data.user_id}' not found."
-                )
+                raise InstanceNotFoundException(ErrorCode.USER_NOT_FOUND)
 
             bot = await uow.bots.get_single(
                 uow.session, id=bot_id, workspace_id=workspace_id
             )
             if not bot:
-                raise InstanceNotFoundException(f"Bot with ID '{bot_id}' not found.")
+                raise InstanceNotFoundException(ErrorCode.BOT_NOT_FOUND)
 
             user_workspace = await uow.workspace_members.get_single(
                 uow.session,
@@ -59,9 +58,7 @@ class AssignBotAdminUseCase:
                 workspace_id=workspace_id,
             )
             if not user_workspace:
-                raise InstanceNotFoundException(
-                    f"User with ID '{data.user_id}' not found in workspace."
-                )
+                raise InstanceNotFoundException(ErrorCode.WORKSPACE_MEMBER_NOT_FOUND)
 
             existing = await uow.admin_bot_roles.exists(
                 uow.session,
@@ -69,9 +66,7 @@ class AssignBotAdminUseCase:
                 bot_id=bot_id,
             )
             if existing:
-                raise InstanceAlreadyExistsException(
-                    f"User '{data.user_id}' already has a role on this bot."
-                )
+                raise InstanceAlreadyExistsException(ErrorCode.BOT_ADMIN_ALREADY_EXISTS)
 
             admin_role = await uow.admin_bot_roles.create(
                 uow.session,

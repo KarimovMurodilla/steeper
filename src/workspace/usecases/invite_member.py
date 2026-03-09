@@ -8,6 +8,7 @@ from loggers import get_logger
 from src.core.database.session import get_unit_of_work
 from src.core.database.uow.abstract import RepositoryProtocol
 from src.core.database.uow.application import ApplicationUnitOfWork
+from src.core.errors.enums import ErrorCode
 from src.core.errors.exceptions import (
     InstanceAlreadyExistsException,
     InstanceNotFoundException,
@@ -46,9 +47,7 @@ class InviteMemberUseCase:
             # 1. Resolve user by telegram_id
             user = await uow.users.get_single(uow.session, telegram_id=data.telegram_id)
             if not user:
-                raise InstanceNotFoundException(
-                    f"No user found with telegram_id '{data.telegram_id}'."
-                )
+                raise InstanceNotFoundException(ErrorCode.USER_NOT_FOUND)
 
             # 2. Guard against duplicate membership
             already_member = await uow.workspace_members.exists(
@@ -57,9 +56,7 @@ class InviteMemberUseCase:
                 workspace_id=workspace_id,
             )
             if already_member:
-                raise InstanceAlreadyExistsException(
-                    f"User '{data.telegram_id}' is already a member of this workspace."
-                )
+                raise InstanceAlreadyExistsException(ErrorCode.WORKSPACE_ALREADY_MEMBER)
 
             # 3. Persist membership
             # workspace = await uow.workspaces.get_single(uow.session, id=workspace_id)

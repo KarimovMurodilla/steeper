@@ -6,6 +6,7 @@ from loggers import get_logger
 from src.bot.schemas import BotUpdateRequest, BotViewModel
 from src.core.database.session import get_unit_of_work
 from src.core.database.uow import ApplicationUnitOfWork, RepositoryProtocol
+from src.core.errors.enums import ErrorCode
 from src.core.errors.exceptions import CoreException, InstanceNotFoundException
 from src.core.utils.encryption import encrypt_token
 from src.core.utils.security import hash_token
@@ -48,7 +49,7 @@ class UpdateBotUseCase:
         async with self.uow as uow:
             bot = await uow.bots.get_single(uow.session, id=bot_id)
             if not bot or bot.workspace_id != workspace_id:
-                raise InstanceNotFoundException("Bot not found in the workspace.")
+                raise InstanceNotFoundException(ErrorCode.BOT_NOT_FOUND)
 
             update_data = data.model_dump(exclude_unset=True)
 
@@ -58,7 +59,7 @@ class UpdateBotUseCase:
             if data.token:
                 bot_info = await self.tg_service.get_me(data.token)
                 if not bot_info:
-                    raise CoreException("Invalid new Telegram Bot Token")
+                    raise CoreException(ErrorCode.AUTH_TOKEN_INVALID)
 
                 token_hash = hash_token(data.token)
                 token_encrypted = encrypt_token(data.token)

@@ -7,6 +7,7 @@ from src.bot.enums import BotRole
 from src.bot.schemas import BotCreateRequest, BotViewModel
 from src.core.database.session import get_unit_of_work
 from src.core.database.uow import ApplicationUnitOfWork, RepositoryProtocol
+from src.core.errors.enums import ErrorCode
 from src.core.errors.exceptions import (
     AccessForbiddenException,
     CoreException,
@@ -38,13 +39,11 @@ class CreateBotUseCase:
         workspace_id: UUID | None,
     ) -> BotViewModel:
         if not workspace_id:
-            raise AccessForbiddenException(
-                "Cannot create a bot without an active workspace context."
-            )
+            raise AccessForbiddenException(ErrorCode.WORKSPACE_ACCESS_DENIED)
 
         bot_info = await self.tg_service.get_me(data.token)
         if not bot_info:
-            raise CoreException("Invalid Telegram Bot Token")
+            raise CoreException(ErrorCode.AUTH_TOKEN_INVALID)
 
         async with self.uow as uow:
             token_hash = hash_token(data.token)

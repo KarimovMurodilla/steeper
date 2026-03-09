@@ -4,6 +4,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 import pytz
 
 from loggers import get_logger
+from src.core.errors.enums import ErrorCode
 from src.core.errors.exceptions import InstanceProcessingException
 from src.main.config import config
 
@@ -61,6 +62,8 @@ def parse_date_range(
                     input_date, datetime_time.max if is_end else datetime_time.min
                 )
             )
+        else:
+            raise ValueError(f"Unsupported input_date type: {type(input_date)}")
 
         return local_dt.astimezone(pytz.utc)  # convert to UTC
 
@@ -209,6 +212,8 @@ def guard_not_future_local_date(
         target_local_date = _ensure_aware_utc(target_date).astimezone(tz).date()
     elif isinstance(target_date, date):
         target_local_date = target_date
+    else:
+        raise ValueError(f"Unsupported target_date type: {type(target_date)}")
 
     if target_local_date > now_local_date:
-        raise InstanceProcessingException("Cannot fetch information for future dates")
+        raise InstanceProcessingException(ErrorCode.GENERAL_DATE_FUTURE)

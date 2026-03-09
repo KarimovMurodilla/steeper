@@ -3,6 +3,7 @@ import jwt
 from redis.asyncio import Redis
 
 from loggers import get_logger
+from src.core.errors.enums import ErrorCode
 from src.core.errors.exceptions import (
     PermissionDeniedException,
 )
@@ -32,7 +33,7 @@ class GetTokensByRefreshUserUseCase:
                 "[RefreshTokens] Blocked user '%s' attempted refresh",
                 user.telegram_id,
             )
-            raise PermissionDeniedException("User is blocked")
+            raise PermissionDeniedException(ErrorCode.USER_BLOCKED)
 
         # Use rotation helper to handle the previous token safely
         new_refresh_token = await rotate_refresh_token(

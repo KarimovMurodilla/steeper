@@ -7,6 +7,7 @@ from src.bot.dependencies import get_current_bot_role
 from src.bot.enums import BotRole
 from src.bot.permissions.enum import BotPermission
 from src.bot.permissions.role_matrix import BOT_ROLE_PERMISSIONS
+from src.core.errors.enums import ErrorCode
 from src.core.errors.exceptions import PermissionDeniedException
 
 
@@ -32,9 +33,7 @@ def require_bot_permission(
 
         # 2. Verify permission
         if required_permission not in allowed_permissions:
-            raise PermissionDeniedException(
-                f"Missing bot permission: {required_permission.value}"
-            )
+            raise PermissionDeniedException(ErrorCode.AUTH_PERMISSION_DENIED)
 
         return current_role
 

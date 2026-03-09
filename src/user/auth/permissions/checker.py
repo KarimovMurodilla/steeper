@@ -3,6 +3,7 @@ from typing import Annotated
 
 from fastapi import Depends
 
+from src.core.errors.enums import ErrorCode
 from src.core.errors.exceptions import (
     AccessForbiddenException,
     PermissionDeniedException,
@@ -30,15 +31,11 @@ def require_permission(
         current_user: Annotated[User, Depends(get_current_user)],
     ) -> User:
         if not current_user.is_active:
-            raise AccessForbiddenException(
-                "You do not have permission to access this resource. User is blocked",
-            )
+            raise AccessForbiddenException(ErrorCode.USER_BLOCKED)
 
         if current_user.is_superuser:
             return current_user
 
-        raise PermissionDeniedException(
-            "Global Permission denied. Superuser privileges required."
-        )
+        raise PermissionDeniedException(ErrorCode.AUTH_PERMISSION_DENIED)
 
     return checker

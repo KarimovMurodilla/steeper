@@ -7,6 +7,7 @@ from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.core.errors.enums import ErrorCode
 from src.core.errors.exceptions import InfrastructureException
 from src.system.schemas import HealthCheckResponse
 
@@ -21,7 +22,7 @@ class HealthService:
         postgres_is_ok = await self._check_postgres(session)
         if not redis_is_ok or not postgres_is_ok:
             raise InfrastructureException(
-                "System health check failed",
+                ErrorCode.SYSTEM_HEALTH_CHECK_FAILED,
                 additional_info={"redis": redis_is_ok, "postgres": postgres_is_ok},
             )
         return HealthCheckResponse(status="ok")

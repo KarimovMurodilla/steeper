@@ -4,6 +4,7 @@ from uuid import UUID
 from celery_tasks.types import CeleryTask
 from loggers import get_logger
 from src.core.database.uow import ApplicationUnitOfWork, RepositoryProtocol
+from src.core.errors.enums import ErrorCode
 from src.core.errors.exceptions import InstanceNotFoundException
 from src.marketing.enums import BroadcastStatus
 from src.marketing.schemas import BroadcastCreateRequest, BroadcastResponse
@@ -27,7 +28,7 @@ class CreateBroadcastUseCase:
         async with self.uow as uow:
             bot = await uow.bots.get_single(uow.session, id=data.bot_id)
             if not bot:
-                raise InstanceNotFoundException("Bot not found")
+                raise InstanceNotFoundException(ErrorCode.BOT_NOT_FOUND)
 
             status = (
                 BroadcastStatus.SCHEDULED if data.schedule_at else BroadcastStatus.DRAFT
