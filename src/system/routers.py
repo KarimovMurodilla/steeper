@@ -10,7 +10,11 @@ from src.system.services import HealthService
 router = APIRouter()
 
 
-@router.get("/health/", response_model=HealthCheckResponse)
+@router.get(
+    "/health/",
+    response_model=HealthCheckResponse,
+    responses={500: {"description": "Internal server error"}},
+)
 @router.head("/health/", response_model=HealthCheckResponse, include_in_schema=False)
 async def check_health(
     health_service: HealthService = Depends(get_health_service),
@@ -20,7 +24,11 @@ async def check_health(
     return await health_service.get_status(session=session)
 
 
-@router.get("/time/", response_model=dict)
+@router.get(
+    "/time/",
+    response_model=dict,
+    responses={500: {"description": "Internal server error"}},
+)
 def get_utc_time() -> dict[str, str]:
     """Endpoint to get the current UTC time in ISO format."""
     now = get_utc_now()

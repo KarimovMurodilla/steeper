@@ -32,6 +32,10 @@ router = APIRouter()
     "/{bot_id}/chats",
     response_model=PaginatedResponse[ChatListItemViewModel],
     status_code=status.HTTP_200_OK,
+    responses={
+        403: {"description": "Permission denied"},
+        404: {"description": "Bot not found"},
+    },
 )
 async def list_bot_chats(
     bot_id: UUID,
@@ -53,6 +57,10 @@ async def list_bot_chats(
     "/{bot_id}/chats/{chat_id}/messages",
     response_model=CursorPaginatedResponse[MessageListItemViewModel],
     status_code=status.HTTP_200_OK,
+    responses={
+        403: {"description": "Permission denied"},
+        404: {"description": "Bot or Chat not found"},
+    },
 )
 async def list_messages(
     bot_id: UUID,
@@ -76,6 +84,11 @@ async def list_messages(
     "/{bot_id}/chats/{chat_id}/messages",
     response_model=SendMessageResponse,
     status_code=status.HTTP_200_OK,
+    responses={
+        400: {"description": "Invalid payload format"},
+        403: {"description": "Permission denied"},
+        404: {"description": "Bot or Chat not found"},
+    },
 )
 async def send_message(
     bot_id: UUID,

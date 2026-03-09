@@ -27,6 +27,10 @@ router = APIRouter()
     status_code=200,
     response_model=TelegramAuthResponse,
     dependencies=[Depends(RateLimiter(times=10, minutes=10))],
+    responses={
+        400: {"description": "Invalid payload format"},
+        403: {"description": "Authentication failed (invalid hash or expired data)"},
+    },
 )
 async def authenticate_via_telegram(
     data: TelegramAuthRequest,
@@ -56,6 +60,11 @@ async def authenticate_via_telegram(
             )
         ),
     ],
+    responses={
+        401: {"description": "Invalid or expired refresh token"},
+        403: {"description": "User account inactive or banned"},
+        404: {"description": "User not found"},
+    },
 )
 async def get_access_by_refresh(
     user_and_payload: Annotated[

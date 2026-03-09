@@ -19,6 +19,11 @@ router = APIRouter()
     "/webhook/{bot_id}",
     status_code=status.HTTP_200_OK,
     response_model=SuccessResponse,
+    responses={
+        400: {"description": "Invalid payload format"},
+        403: {"description": "Invalid Telegram secret token"},
+        404: {"description": "Bot not found"},
+    },
 )
 async def handle_telegram_webhook(
     bot_id: UUID,
@@ -41,6 +46,11 @@ async def handle_telegram_webhook(
     "/webhook/{token_hash}/bot-message",
     status_code=status.HTTP_200_OK,
     response_model=SuccessResponse,
+    responses={
+        400: {"description": "Invalid payload format"},
+        403: {"description": "Invalid or expired token hash"},
+        404: {"description": "Bot not found"},
+    },
 )
 async def log_bot_message(
     token_hash: str,

@@ -42,6 +42,11 @@ router = APIRouter()
     "/",
     response_model=BotViewModel,
     status_code=status.HTTP_201_CREATED,
+    responses={
+        400: {"description": "Invalid payload"},
+        403: {"description": "Permission denied"},
+        409: {"description": "Conflict (e.g., bot exists)"},
+    },
 )
 async def create_bot(
     bot_data: BotCreateRequest,
@@ -68,6 +73,9 @@ async def create_bot(
     "/",
     response_model=PaginatedResponse[BotViewModel],
     status_code=status.HTTP_200_OK,
+    responses={
+        403: {"description": "Permission denied"},
+    },
 )
 async def get_bots(
     current_user: Annotated[User, Depends(get_current_user)],
@@ -93,6 +101,11 @@ async def get_bots(
     "/{bot_id}/admins",
     response_model=AdminBotRoleViewModel,
     status_code=status.HTTP_201_CREATED,
+    responses={
+        400: {"description": "Invalid payload"},
+        403: {"description": "Permission denied"},
+        404: {"description": "Bot or User not found"},
+    },
 )
 async def assign_bot_admin(
     bot_id: UUID,
@@ -115,6 +128,12 @@ async def assign_bot_admin(
     "/{bot_id}",
     response_model=BotViewModel,
     status_code=status.HTTP_200_OK,
+    responses={
+        400: {"description": "Invalid payload"},
+        403: {"description": "Permission denied"},
+        404: {"description": "Bot not found"},
+        409: {"description": "Conflict on update"},
+    },
 )
 async def update_bot(
     bot_id: UUID,
@@ -136,6 +155,10 @@ async def update_bot(
 @router.delete(
     "/{bot_id}",
     status_code=status.HTTP_204_NO_CONTENT,
+    responses={
+        403: {"description": "Permission denied"},
+        404: {"description": "Bot not found"},
+    },
 )
 async def delete_bot(
     bot_id: UUID,

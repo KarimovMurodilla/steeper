@@ -27,6 +27,10 @@ router = APIRouter()
     "/",
     response_model=BroadcastResponse,
     status_code=status.HTTP_201_CREATED,
+    responses={
+        400: {"description": "Invalid payload format"},
+        403: {"description": "Permission denied"},
+    },
 )
 async def create_broadcast(
     data: BroadcastCreateRequest,
@@ -44,6 +48,11 @@ async def create_broadcast(
     "/{broadcast_id}/send",
     response_model=SuccessResponse,
     status_code=status.HTTP_200_OK,
+    responses={
+        403: {"description": "Permission denied"},
+        404: {"description": "Broadcast not found"},
+        409: {"description": "Broadcast not in a sendable state"},
+    },
 )
 async def send_broadcast(
     broadcast_id: UUID,
@@ -60,6 +69,10 @@ async def send_broadcast(
     "/{broadcast_id}/stats",
     response_model=BroadcastStatsResponse,
     status_code=status.HTTP_200_OK,
+    responses={
+        403: {"description": "Permission denied"},
+        404: {"description": "Broadcast not found"},
+    },
 )
 async def get_broadcast_stats(
     broadcast_id: UUID,

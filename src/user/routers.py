@@ -30,6 +30,9 @@ router.include_router(auth_router, prefix="/auth")
 @router.get(
     "/me",
     response_model=UserProfileViewModel,
+    responses={
+        401: {"description": "Not authenticated"},
+    },
 )
 async def get_user_profile(
     current_user: Annotated[User, Depends(get_current_user)],
@@ -40,7 +43,14 @@ async def get_user_profile(
     return UserProfileViewModel.model_validate(current_user)
 
 
-@router.get("/{user_id}", response_model=UserSummaryViewModel)
+@router.get(
+    "/{user_id}",
+    response_model=UserSummaryViewModel,
+    responses={
+        403: {"description": "Permission denied"},
+        404: {"description": "User not found"},
+    },
+)
 async def get_user_info_by_id(
     user_id: UUID,
     current_user: Annotated[

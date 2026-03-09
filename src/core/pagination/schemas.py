@@ -25,11 +25,13 @@ class PaginationParams(Base):
 class PaginatedResponse(Base, Generic[T]):
     """Generic paginated response container."""
 
-    items: list[T]
-    total: int
-    page: int
-    size: int
-    pages: int
+    items: list[T] = Field(..., description="List of items for the current page")
+    total: int = Field(
+        ..., description="Total number of items across all pages", examples=[100]
+    )
+    page: int = Field(..., description="Current page number", examples=[1])
+    size: int = Field(..., description="Number of items per page", examples=[20])
+    pages: int = Field(..., description="Total number of pages", examples=[5])
 
 
 @overload

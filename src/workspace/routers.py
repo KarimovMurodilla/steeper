@@ -34,6 +34,12 @@ router = APIRouter()
 @router.post(
     "/",
     status_code=status.HTTP_201_CREATED,
+    response_model=WorkspaceViewModel,
+    responses={
+        400: {"description": "Invalid payload format"},
+        401: {"description": "Not authenticated"},
+        409: {"description": "Conflict: Workspace exists"},
+    },
 )
 async def create_workspace(
     workspace_data: WorkspaceCreateRequest,
@@ -52,6 +58,10 @@ async def create_workspace(
 @router.get(
     "/",
     status_code=status.HTTP_200_OK,
+    response_model=PaginatedResponse[WorkspaceViewModel],
+    responses={
+        401: {"description": "Not authenticated"},
+    },
 )
 async def get_workspaces(
     pagination: Annotated[PaginationParams, Depends()],
@@ -72,6 +82,13 @@ async def get_workspaces(
 @router.post(
     "/invite",
     status_code=status.HTTP_200_OK,
+    response_model=InviteSuccessResponse,
+    responses={
+        400: {"description": "Invalid payload format"},
+        403: {"description": "Permission denied (Needs INVITE_MEMBER)"},
+        404: {"description": "User not found to invite"},
+        409: {"description": "Conflict: User already in workspace"},
+    },
 )
 async def invite_member(
     data: InviteMemberRequest,
@@ -94,6 +111,10 @@ async def invite_member(
 @router.get(
     "/members",
     status_code=status.HTTP_200_OK,
+    response_model=PaginatedResponse[WorkspaceMemberViewModel],
+    responses={
+        403: {"description": "Permission denied (Needs VIEW_MEMBERS)"},
+    },
 )
 async def list_members(
     pagination: Annotated[PaginationParams, Depends()],
