@@ -35,6 +35,7 @@ from src.core.errors.handlers import (
     as_exception_handler,
 )
 from src.marketing import routers as marketing_routers
+from src.realtime import routers as realtime_routers
 from src.system import routers as system_routers
 
 # Import routers here
@@ -70,6 +71,7 @@ def include_routers(app: FastAPI) -> None:
     v1_router.include_router(
         marketing_routers.router, prefix="/broadcasts", tags=["Broadcasts"]
     )
+    v1_router.include_router(realtime_routers.router, tags=["WebSocket"])
 
     app.include_router(v1_router, prefix="/v1")
     app.include_router(system_routers.router, tags=["System"])

@@ -9,6 +9,7 @@ celery
 email-validator
 fastapi
 fastapi_mail
+faststream[rabbit]
 flower
 GeoAlchemy2
 gunicorn
