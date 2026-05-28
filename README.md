@@ -123,12 +123,12 @@ await steeper.repository.record_outgoing(
         chat_id=chat_id,
         message_id=message_id,
         text="visible text or caption",
-        date=None,  # optional Unix ts; defaults server-side in the client
+        date=None,  # optional Unix ts; if omitted, the client defaults it to the current time
     )
 )
 ```
 
-Both directions are fire-and-forget: if the Steeper backend is unreachable, a warning is logged but your bot continues to work.
+Failures are never fatal: if the Steeper backend is unreachable or returns an error, a warning is logged and your bot keeps working. Note the dispatch model differs per framework — for **aiogram** and **python-telegram-bot** the sync calls are awaited inline, so a slow or unreachable backend can add latency (up to the client timeout, 10s by default) per update; **telebot** dispatches them as background tasks.
 
 ## License
 

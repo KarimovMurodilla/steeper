@@ -18,8 +18,8 @@ Usage (async entrypoint + :meth:`Dispatcher.start_polling`)::
 from __future__ import annotations
 
 import logging
-import types
 from typing import Any, Callable, Awaitable
+from weakref import WeakKeyDictionary
 
 from steeper.repository import OutgoingMessageSnapshot, SteeperRepository, text_from_message_body
 
@@ -72,23 +72,43 @@ async def _log_aiogram_outgoing(repository: SteeperRepository, result: Any) -> N
             await repository.record_outgoing(_snapshot_from_aiogram_message(msg))
 
 
+# Maps each registered Bot to its repository. A WeakKeyDictionary so wrapping a
+# bot never keeps it alive. The class-level patch is installed once and consults
+# this registry, so only bots set up with Steeper are logged.
+_bot_repos: "WeakKeyDictionary[Bot, SteeperRepository]" = WeakKeyDictionary()
+_orig_bot_call: Any = None
+
+
 def _wrap_bot_api_call(bot: Bot, repository: SteeperRepository) -> None:
-    """Intercept all Bot API calls; log any return value that is a Message (or list of them)."""
-    orig = type(bot).__call__
+    """Intercept all Bot API calls; log any return value that is a Message (or list of them).
+
+    aiogram dispatches every API method via ``await self(method)`` — an *implicit* call,
+    which Python resolves through ``type(self).__call__`` rather than any instance attribute.
+    So the wrapper must be installed on the class, not the instance; a per-bot registry keeps
+    it scoped to bots that were actually set up with Steeper.
+    """
+    global _orig_bot_call
+    _bot_repos[bot] = repository
+
+    if _orig_bot_call is not None:
+        return
+    _orig_bot_call = Bot.__call__
 
     async def patched(
         self: Bot,
         method: Any,
         request_timeout: int | None = None,
     ) -> Any:
-        result = await orig(self, method, request_timeout=request_timeout)
-        try:
-            await _log_aiogram_outgoing(repository, result)
-        except Exception:
-            logger.debug("Failed to log outgoing message", exc_info=True)
+        result = await _orig_bot_call(self, method, request_timeout=request_timeout)
+        repo = _bot_repos.get(self)
+        if repo is not None:
+            try:
+                await _log_aiogram_outgoing(repo, result)
+            except Exception:
+                logger.debug("Failed to log outgoing message", exc_info=True)
         return result
 
-    bot.__call__ = types.MethodType(patched, bot)  # type: ignore[method-assign]
+    Bot.__call__ = patched  # type: ignore[method-assign]
 
 
 class SteeperMiddleware:
