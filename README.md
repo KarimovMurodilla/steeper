@@ -26,22 +26,40 @@ Every integration requires three values:
 ### aiogram v3
 
 ```python
-from aiogram import Bot, Dispatcher
+import asyncio
+
+from aiogram import Bot, Dispatcher, Router
+from aiogram.filters import CommandStart
+from aiogram.types import Message
 from steeper.integrations.aiogram import SteeperMiddleware
 
 BOT_TOKEN = "123456:ABC-DEF..."
-bot = Bot(token=BOT_TOKEN)
-dp = Dispatcher()
 
-steeper = SteeperMiddleware(
-    base_url="http://localhost:8000",
-    bot_id="your-bot-uuid",
-    bot_token=BOT_TOKEN,
-)
-steeper.setup(dp, bot)
+router = Router()
 
-# ... register your handlers as usual ...
-dp.run_polling(bot)
+
+@router.message(CommandStart())
+async def cmd_start(message: Message) -> None:
+    await message.answer("Hello!")
+
+
+async def main() -> None:
+    bot = Bot(token=BOT_TOKEN)
+    dp = Dispatcher()
+    dp.include_router(router)
+
+    steeper = SteeperMiddleware(
+        base_url="http://localhost:8000",
+        bot_id="your-bot-uuid",
+        bot_token=BOT_TOKEN,
+    )
+    steeper.setup(dp, bot)
+
+    await dp.start_polling(bot)
+
+
+if __name__ == "__main__":
+    asyncio.run(main())
 ```
 
 ### pyTelegramBotAPI (telebot)
@@ -86,11 +104,31 @@ app.run_polling()
 
 ## How it works
 
-1. **Incoming messages** — the middleware intercepts every Telegram Update, serializes it to the standard Telegram JSON format, and POSTs it to the Steeper webhook endpoint. Your handlers still run normally.
+All HTTP calls to Steeper go through **`SteeperRepository`** (`steeper.repository`): it forwards **incoming** updates and records **outgoing** bot messages to your backend. Each `SteeperMiddleware` exposes `.repository` (and `.client` for the underlying async HTTP client).
 
-2. **Outgoing messages** — `Bot.send_message` is patched so that every bot reply is also logged to the Steeper bot-message endpoint.
+1. **Incoming** — the integration passes each update as Telegram-shaped JSON to `repository.forward_update(...)`. Your handlers still run as usual.
 
-Both operations are fire-and-forget: if the Steeper backend is unreachable, a warning is logged but your bot continues to work.
+2. **Outgoing** — the integration hooks the framework so bot-originated messages are turned into `OutgoingMessageSnapshot` values and sent with `repository.record_outgoing(...)`.
+   - **aiogram** — `Bot.__call__` is wrapped so any API call whose result is a `Message` (or a list of them, e.g. media groups) is logged—not only `send_message`.
+   - **python-telegram-bot** — `Bot._post` is wrapped so JSON responses that decode to `Message` instances are logged (sends, edits, media groups, etc.).
+   - **telebot** — `telebot.apihelper._make_request` is wrapped for your bot token so JSON `result` payloads that contain full `message` objects are logged.
+
+If you bypass the normal API (e.g. raw HTTP to Telegram), call the repository yourself:
+
+```python
+from steeper.repository import OutgoingMessageSnapshot
+
+await steeper.repository.record_outgoing(
+    OutgoingMessageSnapshot(
+        chat_id=chat_id,
+        message_id=message_id,
+        text="visible text or caption",
+        date=None,  # optional Unix ts; defaults server-side in the client
+    )
+)
+```
+
+Both directions are fire-and-forget: if the Steeper backend is unreachable, a warning is logged but your bot continues to work.
 
 ## License
 

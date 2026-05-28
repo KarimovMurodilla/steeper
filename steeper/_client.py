@@ -16,7 +16,18 @@ class SteeperClient:
 
     def __init__(self, config: SteeperConfig, *, timeout: float = 10.0) -> None:
         self._config = config
-        self._http = httpx.AsyncClient(timeout=timeout)
+        # verify defaults to True; keep it explicit so TLS validation is never
+        # silently disabled by a future refactor.
+        self._http = httpx.AsyncClient(timeout=timeout, verify=True)
+
+    def _redact(self, message: str) -> str:
+        """Strip the auth secret from text headed for the logs.
+
+        The bot-message endpoint carries ``token_hash`` in its URL path, so a
+        raw httpx error (which includes the request URL) would otherwise leak
+        the auth secret into log files.
+        """
+        return message.replace(self._config.token_hash, "***")
 
     async def forward_update(self, update: dict[str, Any]) -> None:
         """POST a raw Telegram Update to the Steeper webhook endpoint."""
@@ -30,7 +41,7 @@ class SteeperClient:
             )
             resp.raise_for_status()
         except httpx.HTTPError as exc:
-            logger.warning("Steeper webhook failed: %s", exc)
+            logger.warning("Steeper webhook failed: %s", self._redact(str(exc)))
 
     async def log_bot_message(
         self,
@@ -53,7 +64,7 @@ class SteeperClient:
             )
             resp.raise_for_status()
         except httpx.HTTPError as exc:
-            logger.warning("Steeper bot-message log failed: %s", exc)
+            logger.warning("Steeper bot-message log failed: %s", self._redact(str(exc)))
 
     async def close(self) -> None:
         await self._http.aclose()

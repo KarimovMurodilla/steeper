@@ -1,28 +1,27 @@
 """Steeper middleware for **aiogram v3**.
 
-Usage::
+Usage (async entrypoint + :meth:`Dispatcher.start_polling`)::
 
+    import asyncio
     from aiogram import Bot, Dispatcher
     from steeper.integrations.aiogram import SteeperMiddleware
 
-    bot = Bot(token=BOT_TOKEN)
-    dp = Dispatcher()
+    async def main() -> None:
+        bot = Bot(token=BOT_TOKEN)
+        dp = Dispatcher()
+        SteeperMiddleware(...).setup(dp, bot)
+        await dp.start_polling(bot)
 
-    steeper = SteeperMiddleware(
-        base_url="http://localhost:8000",
-        bot_id="<uuid>",
-        bot_token=BOT_TOKEN,
-    )
-    steeper.setup(dp, bot)
+    asyncio.run(main())
 """
 
 from __future__ import annotations
 
 import logging
+import types
 from typing import Any, Callable, Awaitable
 
-from steeper._client import SteeperClient
-from steeper._config import SteeperConfig
+from steeper.repository import OutgoingMessageSnapshot, SteeperRepository, text_from_message_body
 
 logger = logging.getLogger("steeper.aiogram")
 
@@ -39,8 +38,8 @@ except ImportError as _exc:
 class _IncomingMiddleware(BaseMiddleware):
     """Outer middleware on ``Update`` — forwards raw updates to Steeper."""
 
-    def __init__(self, client: SteeperClient) -> None:
-        self._client = client
+    def __init__(self, repository: SteeperRepository) -> None:
+        self._repository = repository
 
     async def __call__(
         self,
@@ -49,51 +48,47 @@ class _IncomingMiddleware(BaseMiddleware):
         data: dict[str, Any],
     ) -> Any:
         raw = event.model_dump(mode="json")
-        await self._client.forward_update(raw)
+        await self._repository.forward_update(raw)
         return await handler(event, data)
 
 
-class _OutgoingMiddleware(BaseMiddleware):
-    """Outer middleware on ``Message`` (response) — catches bot replies."""
+def _snapshot_from_aiogram_message(message: Message) -> OutgoingMessageSnapshot:
+    text = text_from_message_body(text=message.text, caption=message.caption)
+    date_val = int(message.date.timestamp()) if message.date else None
+    return OutgoingMessageSnapshot(
+        chat_id=message.chat.id,
+        message_id=message.message_id,
+        text=text,
+        date=date_val,
+    )
 
-    def __init__(self, client: SteeperClient) -> None:
-        self._client = client
 
-    async def __call__(
-        self,
-        handler: Callable[[Message, dict[str, Any]], Awaitable[Any]],
-        event: Message,
-        data: dict[str, Any],
+async def _log_aiogram_outgoing(repository: SteeperRepository, result: Any) -> None:
+    if isinstance(result, Message):
+        await repository.record_outgoing(_snapshot_from_aiogram_message(result))
+        return
+    if isinstance(result, list) and result and isinstance(result[0], Message):
+        for msg in result:
+            await repository.record_outgoing(_snapshot_from_aiogram_message(msg))
+
+
+def _wrap_bot_api_call(bot: Bot, repository: SteeperRepository) -> None:
+    """Intercept all Bot API calls; log any return value that is a Message (or list of them)."""
+    orig = type(bot).__call__
+
+    async def patched(
+        self: Bot,
+        method: Any,
+        request_timeout: int | None = None,
     ) -> Any:
-        result = await handler(event, data)
-        if isinstance(result, Message):
-            await self._client.log_bot_message(
-                chat_id=result.chat.id,
-                text=result.text or result.caption or "",
-                message_id=result.message_id,
-                date=int(result.date.timestamp()) if result.date else None,
-            )
-        return result
-
-
-def _wrap_bot_send(bot: Bot, client: SteeperClient) -> None:
-    """Monkey-patch ``Bot.send_message`` to also log to Steeper."""
-    _original_send = bot.send_message
-
-    async def _patched_send(*args: Any, **kwargs: Any) -> Message:
-        result: Message = await _original_send(*args, **kwargs)
+        result = await orig(self, method, request_timeout=request_timeout)
         try:
-            await client.log_bot_message(
-                chat_id=result.chat.id,
-                text=result.text or result.caption or "",
-                message_id=result.message_id,
-                date=int(result.date.timestamp()) if result.date else None,
-            )
+            await _log_aiogram_outgoing(repository, result)
         except Exception:
             logger.debug("Failed to log outgoing message", exc_info=True)
         return result
 
-    bot.send_message = _patched_send  # type: ignore[assignment]
+    bot.__call__ = types.MethodType(patched, bot)  # type: ignore[method-assign]
 
 
 class SteeperMiddleware:
@@ -110,27 +105,35 @@ class SteeperMiddleware:
         *,
         timeout: float = 10.0,
     ) -> None:
-        self._config = SteeperConfig(
+        self._repository = SteeperRepository(
             base_url=base_url,
             bot_id=bot_id,
             bot_token=bot_token,
+            timeout=timeout,
         )
-        self._client = SteeperClient(self._config, timeout=timeout)
 
     def setup(self, dp: Dispatcher, bot: Bot) -> None:
         """Register Steeper on the dispatcher and bot.
 
         - Incoming updates are forwarded via an outer Update middleware.
-        - Outgoing ``send_message`` calls are patched to log bot replies.
+        - Outgoing traffic is observed by wrapping :meth:`Bot.__call__`, so any API call that
+          returns a :class:`~aiogram.types.Message` (``send_message``, ``send_photo``, media
+          groups, etc.) is logged to Steeper.
         """
         dp.update.outer_middleware(self._incoming)
-        _wrap_bot_send(bot, self._client)
+        _wrap_bot_api_call(bot, self._repository)
         logger.info("Steeper middleware registered for aiogram")
 
     @property
     def _incoming(self) -> _IncomingMiddleware:
-        return _IncomingMiddleware(self._client)
+        return _IncomingMiddleware(self._repository)
 
     @property
-    def client(self) -> SteeperClient:
-        return self._client
+    def repository(self) -> SteeperRepository:
+        return self._repository
+
+    @property
+    def client(self):
+        """Compatibility alias for :attr:`repository.client`."""
+        return self._repository.client
+

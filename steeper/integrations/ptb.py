@@ -19,15 +19,15 @@ from __future__ import annotations
 
 import logging
 import time
+import types
 from typing import Any
 
-from steeper._client import SteeperClient
-from steeper._config import SteeperConfig
+from steeper.repository import OutgoingMessageSnapshot, SteeperRepository, text_from_message_body
 
 logger = logging.getLogger("steeper.ptb")
 
 try:
-    from telegram import Message, Update, User, Chat
+    from telegram import Message, Update
     from telegram.ext import (
         Application,
         BaseHandler,
@@ -51,7 +51,7 @@ def _update_to_dict(update: Update) -> dict[str, Any]:
     return raw
 
 
-def _user_to_dict(user: User) -> dict[str, Any]:
+def _user_to_dict(user: Any) -> dict[str, Any]:
     data: dict[str, Any] = {
         "id": user.id,
         "is_bot": user.is_bot,
@@ -66,7 +66,7 @@ def _user_to_dict(user: User) -> dict[str, Any]:
     return data
 
 
-def _chat_to_dict(chat: Chat) -> dict[str, Any]:
+def _chat_to_dict(chat: Any) -> dict[str, Any]:
     data: dict[str, Any] = {"id": chat.id, "type": chat.type}
     if chat.title:
         data["title"] = chat.title
@@ -94,12 +94,12 @@ def _message_to_dict(msg: Message) -> dict[str, Any]:
     return data
 
 
-class _SteeperHandler(BaseHandler[Update, ContextTypes.DEFAULT_TYPE]):
+class _SteeperHandler(BaseHandler[Update, ContextTypes.DEFAULT_TYPE, None]):
     """Low-priority handler that intercepts every update for Steeper logging."""
 
-    def __init__(self, client: SteeperClient) -> None:
+    def __init__(self, repository: SteeperRepository) -> None:
         super().__init__(callback=self._noop)
-        self._client = client
+        self._repository = repository
 
     def check_update(self, update: object) -> bool:
         return isinstance(update, Update)
@@ -112,32 +112,57 @@ class _SteeperHandler(BaseHandler[Update, ContextTypes.DEFAULT_TYPE]):
         context: ContextTypes.DEFAULT_TYPE,
     ) -> None:
         raw = _update_to_dict(update)
-        await self._client.forward_update(raw)
+        await self._repository.forward_update(raw)
 
     @staticmethod
     async def _noop(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         pass
 
 
-def _wrap_bot_send(application: Application, client: SteeperClient) -> None:  # type: ignore[type-arg]
-    """Patch ``Bot.send_message`` to also log to Steeper."""
-    bot = application.bot
-    _original_send = bot.send_message
+def _messages_from_ptb_post_result(bot: Any, result: Any) -> list[Message]:
+    """Turn raw ``_post`` JSON into :class:`telegram.Message` instances when applicable."""
+    if result is True:
+        return []
+    if isinstance(result, dict) and "message_id" in result:
+        m = Message.de_json(result, bot)
+        return [m] if m else []
+    if isinstance(result, list) and result:
+        if isinstance(result[0], dict) and "message_id" in result[0]:
+            return Message.de_list(result, bot)
+    return []
 
-    async def _patched_send(*args: Any, **kwargs: Any) -> Message:
-        result: Message = await _original_send(*args, **kwargs)
+
+def _snapshot_from_ptb_message(message: Message) -> OutgoingMessageSnapshot:
+    text = text_from_message_body(text=message.text, caption=message.caption)
+    date_val = int(message.date.timestamp()) if message.date else None
+    return OutgoingMessageSnapshot(
+        chat_id=message.chat.id,
+        message_id=message.message_id,
+        text=text,
+        date=date_val,
+    )
+
+
+def _wrap_bot_post(application: Application, repository: SteeperRepository) -> None:  # type: ignore[type-arg]
+    """Wrap ``Bot._post`` so any response that decodes to Message(s) is logged."""
+    bot = application.bot
+    orig = bot._post
+
+    async def patched(
+        self: Any,
+        endpoint: str,
+        data: Any = None,
+        **kwargs: Any,
+    ) -> Any:
+        result = await orig(endpoint, data, **kwargs)
         try:
-            await client.log_bot_message(
-                chat_id=result.chat.id,
-                text=result.text or result.caption or "",
-                message_id=result.message_id,
-                date=int(result.date.timestamp()) if result.date else None,
-            )
+            for msg in _messages_from_ptb_post_result(bot, result):
+                await repository.record_outgoing(_snapshot_from_ptb_message(msg))
         except Exception:
             logger.debug("Failed to log outgoing message", exc_info=True)
         return result
 
-    bot.send_message = _patched_send  # type: ignore[assignment]
+    bot._post = types.MethodType(patched, bot)  # type: ignore[assignment]
 
 
 class SteeperMiddleware:
@@ -154,23 +179,31 @@ class SteeperMiddleware:
         *,
         timeout: float = 10.0,
     ) -> None:
-        self._config = SteeperConfig(
+        self._repository = SteeperRepository(
             base_url=base_url,
             bot_id=bot_id,
             bot_token=bot_token,
+            timeout=timeout,
         )
-        self._client = SteeperClient(self._config, timeout=timeout)
 
     def setup(self, application: Application) -> None:  # type: ignore[type-arg]
         """Register Steeper hooks on a PTB Application.
 
         - Incoming: a low-priority handler that captures every Update.
-        - Outgoing: ``Bot.send_message`` is patched to log bot replies.
+        - Outgoing: ``Bot._post`` is wrapped so JSON that represents sent/edited messages
+          (``sendMessage``, ``sendPhoto``, ``sendMediaGroup``, ``editMessageText``, etc.) is
+          logged to Steeper.
         """
-        application.add_handler(_SteeperHandler(self._client), group=-1)
-        _wrap_bot_send(application, self._client)
+        application.add_handler(_SteeperHandler(self._repository), group=-1)
+        _wrap_bot_post(application, self._repository)
         logger.info("Steeper middleware registered for python-telegram-bot")
 
     @property
-    def client(self) -> SteeperClient:
-        return self._client
+    def repository(self) -> SteeperRepository:
+        return self._repository
+
+    @property
+    def client(self):
+        """Compatibility alias for :attr:`repository.client`."""
+        return self._repository.client
+

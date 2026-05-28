@@ -1,6 +1,6 @@
 """Steeper — Telegram bot middleware for the Steeper platform."""
 
-__version__ = "0.1.0"
+__version__ = "0.1.2"
 
 
 def __getattr__(name: str):
@@ -10,7 +10,13 @@ def __getattr__(name: str):
     if name == "SteeperClient":
         from steeper._client import SteeperClient
         return SteeperClient
+    if name == "SteeperRepository":
+        from steeper.repository import SteeperRepository
+        return SteeperRepository
+    if name == "OutgoingMessageSnapshot":
+        from steeper.repository import OutgoingMessageSnapshot
+        return OutgoingMessageSnapshot
     raise AttributeError(f"module 'steeper' has no attribute {name!r}")
 
 
-__all__ = ["SteeperConfig", "SteeperClient"]
+__all__ = ["SteeperConfig", "SteeperClient", "SteeperRepository", "OutgoingMessageSnapshot"]

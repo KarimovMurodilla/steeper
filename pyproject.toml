@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "steeper"
-version = "0.1.0"
+version = "0.1.2"
 description = "Telegram bot middleware for Steeper — intercepts updates and outgoing messages to sync with the Steeper platform."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -38,8 +38,15 @@ all = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/steeper/steeper"
-Repository = "https://github.com/steeper/steeper"
+Homepage = "https://github.com/KarimovMurodilla/steeper"
+Repository = "https://github.com/KarimovMurodilla/steeper"
 
 [tool.hatch.build.targets.wheel]
 packages = ["steeper"]
+
+[tool.hatch.build.targets.sdist]
+include = [
+    "steeper",
+    "README.md",
+    "pyproject.toml",
+]
