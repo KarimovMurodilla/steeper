@@ -18,7 +18,6 @@ Usage::
 from __future__ import annotations
 
 import logging
-import time
 import types
 from typing import Any
 
@@ -40,60 +39,6 @@ except ImportError as _exc:
     ) from _exc
 
 
-def _update_to_dict(update: Update) -> dict[str, Any]:
-    """Convert a PTB Update to a Telegram-compatible dict."""
-    raw: dict[str, Any] = {"update_id": update.update_id}
-
-    if update.message:
-        raw["message"] = _message_to_dict(update.message)
-    if update.edited_message:
-        raw["edited_message"] = _message_to_dict(update.edited_message)
-    return raw
-
-
-def _user_to_dict(user: Any) -> dict[str, Any]:
-    data: dict[str, Any] = {
-        "id": user.id,
-        "is_bot": user.is_bot,
-        "first_name": user.first_name,
-    }
-    if user.last_name:
-        data["last_name"] = user.last_name
-    if user.username:
-        data["username"] = user.username
-    if user.language_code:
-        data["language_code"] = user.language_code
-    return data
-
-
-def _chat_to_dict(chat: Any) -> dict[str, Any]:
-    data: dict[str, Any] = {"id": chat.id, "type": chat.type}
-    if chat.title:
-        data["title"] = chat.title
-    if chat.username:
-        data["username"] = chat.username
-    if chat.first_name:
-        data["first_name"] = chat.first_name
-    if chat.last_name:
-        data["last_name"] = chat.last_name
-    return data
-
-
-def _message_to_dict(msg: Message) -> dict[str, Any]:
-    data: dict[str, Any] = {
-        "message_id": msg.message_id,
-        "chat": _chat_to_dict(msg.chat),
-        "date": int(msg.date.timestamp()) if msg.date else int(time.time()),
-    }
-    if msg.from_user:
-        data["from"] = _user_to_dict(msg.from_user)
-    if msg.text:
-        data["text"] = msg.text
-    if msg.caption:
-        data["caption"] = msg.caption
-    return data
-
-
 class _SteeperHandler(BaseHandler[Update, ContextTypes.DEFAULT_TYPE, None]):
     """Low-priority handler that intercepts every update for Steeper logging."""
 
@@ -111,7 +56,7 @@ class _SteeperHandler(BaseHandler[Update, ContextTypes.DEFAULT_TYPE, None]):
         check_result: Any,
         context: ContextTypes.DEFAULT_TYPE,
     ) -> None:
-        raw = _update_to_dict(update)
+        raw = update.to_dict(recursive=True)
         await self._repository.forward_update(raw)
 
     @staticmethod

@@ -18,8 +18,8 @@ Usage::
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
-import time
 from typing import Any
 
 from steeper.repository import OutgoingMessageSnapshot, SteeperRepository, text_from_message_body
@@ -110,6 +110,54 @@ def _ensure_apihelper_patch() -> None:
     _apihelper._make_request = _wrapped  # type: ignore[assignment]
 
 
+# Attributes on a telebot ``Update`` that are not themselves update payloads.
+_UPDATE_META_FIELDS = frozenset({"update_id", "json"})
+
+
+def _full_update_from_telebot(update: tg_types.Update) -> dict[str, Any]:
+    """Reconstruct a full, Telegram-shaped update dict from a telebot ``Update``.
+
+    telebot doesn't keep the raw update JSON, but it preserves ``update_id`` and the
+    raw ``.json`` of every parsed sub-object (``message``, ``callback_query``,
+    ``inline_query``, ``channel_post``, …). We forward whichever ones are present so
+    the backend receives the same full fidelity as the aiogram integration.
+    """
+    raw: dict[str, Any] = {"update_id": update.update_id}
+    for name, value in vars(update).items():
+        if name in _UPDATE_META_FIELDS or value is None:
+            continue
+        sub = getattr(value, "json", None)
+        if isinstance(sub, str):
+            try:
+                sub = json.loads(sub)
+            except ValueError:
+                continue
+        if isinstance(sub, dict):
+            raw[name] = sub
+    return raw
+
+
+def _wrap_process_new_updates(bot: _telebot.TeleBot, repository: SteeperRepository) -> None:
+    """Wrap ``TeleBot.process_new_updates`` — the single funnel for every update type.
+
+    This covers both polling and webhook dispatch and yields the real ``update_id``,
+    unlike a message-only middleware.
+    """
+    orig = bot.process_new_updates
+
+    def patched(updates: Any) -> Any:
+        for update in updates or []:
+            try:
+                raw = _full_update_from_telebot(update)
+            except Exception:
+                logger.debug("Failed to build update payload", exc_info=True)
+                continue
+            _run_async(repository.forward_update(raw))
+        return orig(updates)
+
+    bot.process_new_updates = patched  # type: ignore[assignment]
+
+
 class SteeperMiddleware:
     """All-in-one Steeper integration for pyTelegramBotAPI.
 
@@ -134,33 +182,14 @@ class SteeperMiddleware:
     def setup(self, bot: _telebot.TeleBot) -> None:
         """Register Steeper hooks on a sync TeleBot instance.
 
-        - Incoming: ``middleware_handler`` that fires on every update.
+        - Incoming: ``TeleBot.process_new_updates`` is wrapped so every update (with its real
+          ``update_id`` and full payload) is forwarded to Steeper, for both polling and webhooks.
         - Outgoing: ``telebot.apihelper._make_request`` is wrapped (scoped to this bot's token)
           so API responses that contain full message objects are logged to Steeper.
         """
         _token_repos[bot.token] = self._repository
         _ensure_apihelper_patch()
-
-        bot.use_class_middlewares = True
-
-        class _Incoming(_telebot.handler_backends.BaseMiddleware):
-            update_types = ["message", "edited_message"]
-
-            def __init__(self_inner) -> None:  # noqa: N805
-                super().__init__()
-                self_inner.repository = self._repository
-
-            def pre_process(self_inner, message: tg_types.Message, data: dict[str, Any]) -> None:  # noqa: N805
-                update_dict: dict[str, Any] = {
-                    "update_id": 0,
-                    "message": _message_to_dict(message),
-                }
-                _run_async(self_inner.repository.forward_update(update_dict))
-
-            def post_process(self_inner, message: tg_types.Message, data: dict[str, Any], exception: BaseException | None) -> None:  # noqa: N805
-                pass
-
-        bot.register_middleware_handler(_Incoming())
+        _wrap_process_new_updates(bot, self._repository)
 
         logger.info("Steeper middleware registered for pyTelegramBotAPI")
 
@@ -172,39 +201,3 @@ class SteeperMiddleware:
     def client(self):
         """Compatibility alias for :attr:`repository.client`."""
         return self._repository.client
-
-
-def _message_to_dict(msg: tg_types.Message) -> dict[str, Any]:
-    """Convert a telebot Message to a Telegram-compatible dict."""
-    data: dict[str, Any] = {
-        "message_id": msg.message_id,
-        "chat": {"id": msg.chat.id, "type": msg.chat.type},
-        "date": msg.date or int(time.time()),
-    }
-    if msg.chat.title:
-        data["chat"]["title"] = msg.chat.title
-    if msg.chat.username:
-        data["chat"]["username"] = msg.chat.username
-    if msg.chat.first_name:
-        data["chat"]["first_name"] = msg.chat.first_name
-    if msg.chat.last_name:
-        data["chat"]["last_name"] = msg.chat.last_name
-
-    if msg.from_user:
-        data["from"] = {
-            "id": msg.from_user.id,
-            "is_bot": msg.from_user.is_bot,
-            "first_name": msg.from_user.first_name,
-        }
-        if msg.from_user.last_name:
-            data["from"]["last_name"] = msg.from_user.last_name
-        if msg.from_user.username:
-            data["from"]["username"] = msg.from_user.username
-        if msg.from_user.language_code:
-            data["from"]["language_code"] = msg.from_user.language_code
-
-    if msg.text:
-        data["text"] = msg.text
-    if msg.caption:
-        data["caption"] = msg.caption
-    return data
