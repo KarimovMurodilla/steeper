@@ -23,6 +23,12 @@ htmlcov/
 .pypirc
 .env
 .env.*
+.claude/settings.local.json
+*.pem
+*.key
+
+# Logs (may contain tokens or message content)
+*.log
 
 # Editors / OS
 .idea/
