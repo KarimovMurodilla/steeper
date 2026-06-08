@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "steeper"
-version = "0.1.2"
+dynamic = ["version"]
 description = "Telegram bot middleware for Steeper — intercepts updates and outgoing messages to sync with the Steeper platform."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -36,10 +36,27 @@ all = [
     "pyTelegramBotAPI>=4.0",
     "python-telegram-bot>=20.0",
 ]
+test = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.23",
+    "respx>=0.21",
+]
+dev = [
+    "ruff>=0.6",
+    "mypy>=1.11",
+    "build>=1.2",
+    "twine>=5.0",
+]
 
 [project.urls]
 Homepage = "https://github.com/KarimovMurodilla/steeper"
 Repository = "https://github.com/KarimovMurodilla/steeper"
+Documentation = "https://github.com/KarimovMurodilla/steeper#readme"
+Changelog = "https://github.com/KarimovMurodilla/steeper/blob/main/CHANGELOG.md"
+Issues = "https://github.com/KarimovMurodilla/steeper/issues"
+
+[tool.hatch.version]
+path = "steeper/__init__.py"
 
 [tool.hatch.build.targets.wheel]
 packages = ["steeper"]
@@ -48,5 +65,32 @@ packages = ["steeper"]
 include = [
     "steeper",
     "README.md",
+    "CHANGELOG.md",
+    "LICENSE",
     "pyproject.toml",
 ]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "W"]
+
+[tool.mypy]
+python_version = "3.10"
+strict = true
+files = ["steeper"]
+
+# Integrations monkey-patch third-party frameworks whose type stubs vary by
+# version; full strictness here is fragile across the CI matrix. Keep the core
+# strict, relax the framework-wrapping edges.
+[[tool.mypy.overrides]]
+module = "steeper.integrations.*"
+warn_unused_ignores = false
+disallow_untyped_defs = false
+disable_error_code = ["override", "no-untyped-def", "unused-ignore"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]

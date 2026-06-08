@@ -32,9 +32,7 @@ class SteeperConfig:
         # (``file://``, ``ftp://``, ``gopher://`` … which httpx or downstream
         # tooling could otherwise be coerced into following).
         if parts.scheme not in ("http", "https"):
-            raise ValueError(
-                f"base_url must use the http or https scheme, got {parts.scheme!r}"
-            )
+            raise ValueError(f"base_url must use the http or https scheme, got {parts.scheme!r}")
         if not parts.netloc:
             raise ValueError("base_url must include a host (e.g. https://host:port)")
         if not self.bot_id:
@@ -70,8 +68,7 @@ class SteeperConfig:
     @property
     def bot_message_url(self) -> str:
         return (
-            f"{self._base}/v1/communications/webhook/"
-            f"{quote(self.token_hash, safe='')}/bot-message"
+            f"{self._base}/v1/communications/webhook/{quote(self.token_hash, safe='')}/bot-message"
         )
 
     def secret_matches(self, candidate: str) -> bool:
