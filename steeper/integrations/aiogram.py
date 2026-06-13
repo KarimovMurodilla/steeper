@@ -18,7 +18,8 @@ Usage (async entrypoint + :meth:`Dispatcher.start_polling`)::
 from __future__ import annotations
 
 import logging
-from typing import Any, Callable, Awaitable
+from collections.abc import Awaitable, Callable
+from typing import Any
 from weakref import WeakKeyDictionary
 
 from steeper.repository import OutgoingMessageSnapshot, SteeperRepository, text_from_message_body
@@ -27,7 +28,7 @@ logger = logging.getLogger("steeper.aiogram")
 
 try:
     from aiogram import BaseMiddleware, Bot, Dispatcher
-    from aiogram.types import Update, Message
+    from aiogram.types import Message, Update
 except ImportError as _exc:
     raise ImportError(
         "aiogram>=3.0 is required for this integration. "
@@ -75,7 +76,7 @@ async def _log_aiogram_outgoing(repository: SteeperRepository, result: Any) -> N
 # Maps each registered Bot to its repository. A WeakKeyDictionary so wrapping a
 # bot never keeps it alive. The class-level patch is installed once and consults
 # this registry, so only bots set up with Steeper are logged.
-_bot_repos: "WeakKeyDictionary[Bot, SteeperRepository]" = WeakKeyDictionary()
+_bot_repos: WeakKeyDictionary[Bot, SteeperRepository] = WeakKeyDictionary()
 _orig_bot_call: Any = None
 
 
@@ -156,4 +157,3 @@ class SteeperMiddleware:
     def client(self):
         """Compatibility alias for :attr:`repository.client`."""
         return self._repository.client
-

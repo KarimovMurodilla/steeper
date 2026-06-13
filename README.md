@@ -1,5 +1,10 @@
 # Steeper
 
+[![PyPI version](https://img.shields.io/pypi/v/steeper.svg)](https://pypi.org/project/steeper/)
+[![Python versions](https://img.shields.io/pypi/pyversions/steeper.svg)](https://pypi.org/project/steeper/)
+[![CI](https://github.com/KarimovMurodilla/steeper/actions/workflows/ci.yml/badge.svg)](https://github.com/KarimovMurodilla/steeper/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 Telegram bot middleware that syncs incoming user messages and outgoing bot replies with the **Steeper** platform.
 
 ## Installation
@@ -10,6 +15,12 @@ pip install steeper[aiogram]     # aiogram v3
 pip install steeper[telebot]     # pyTelegramBotAPI
 pip install steeper[ptb]         # python-telegram-bot v20+
 ```
+
+> **Need a backend?** Steeper is self-hosted. Run the Steeper backend (Docker Compose), create a superuser, and register a bot to get its `bot_id`. Point `base_url` at your instance. <!-- TODO: link to the backend repo / self-hosting guide -->
+
+Runnable examples for every framework live in [`examples/`](examples/). For the
+big picture — platform, library, and how they interact — see
+[`docs/OVERVIEW.md`](docs/OVERVIEW.md).
 
 ## Configuration
 
@@ -130,6 +141,21 @@ await steeper.repository.record_outgoing(
 
 Failures are never fatal: if the Steeper backend is unreachable or returns an error, a warning is logged and your bot keeps working. Note the dispatch model differs per framework — for **aiogram** and **python-telegram-bot** the sync calls are awaited inline, so a slow or unreachable backend can add latency (up to the client timeout, 10s by default) per update; **telebot** dispatches them as background tasks.
 
+## Backend compatibility
+
+This library talks to the Steeper backend's **`/v1`** HTTP API:
+
+| Endpoint | Purpose |
+|----------|---------|
+| `POST /v1/communications/webhook/{bot_id}` | Forward incoming Telegram updates (auth via `x-telegram-bot-api-secret-token` = SHA-256 of the bot token) |
+| `POST /v1/communications/webhook/{token_hash}/bot-message` | Record outgoing bot messages |
+
+| `steeper` (library) | Steeper backend API |
+|---------------------|---------------------|
+| `0.1.x`             | `v1`                |
+
+As long as the backend keeps the `v1` contract above, any `0.1.x` client works. Breaking changes to the contract will bump the API version (`/v2`) and the library minor version together.
+
 ## License
 
-MIT
+MIT — see [LICENSE](LICENSE).

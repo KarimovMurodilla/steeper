@@ -23,6 +23,7 @@ htmlcov/
 .pypirc
 .env
 .env.*
+!.env.example
 .claude/settings.local.json
 *.pem
 *.key

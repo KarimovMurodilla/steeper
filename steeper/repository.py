@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Any
 
 from steeper._client import SteeperClient
 from steeper._config import SteeperConfig
@@ -55,7 +56,7 @@ class SteeperRepository:
         """Low-level HTTP client (same instance integrations have always used)."""
         return self._client
 
-    async def forward_update(self, update: dict) -> None:
+    async def forward_update(self, update: dict[str, Any]) -> None:
         """POST a raw Telegram update JSON to Steeper."""
         await self._client.forward_update(update)
 

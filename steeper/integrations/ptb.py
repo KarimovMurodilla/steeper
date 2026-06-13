@@ -73,7 +73,7 @@ def _messages_from_ptb_post_result(bot: Any, result: Any) -> list[Message]:
         return [m] if m else []
     if isinstance(result, list) and result:
         if isinstance(result[0], dict) and "message_id" in result[0]:
-            return Message.de_list(result, bot)
+            return list(Message.de_list(result, bot))
     return []
 
 
@@ -151,4 +151,3 @@ class SteeperMiddleware:
     def client(self):
         """Compatibility alias for :attr:`repository.client`."""
         return self._repository.client
-
