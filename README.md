@@ -16,7 +16,7 @@ pip install steeper[telebot]     # pyTelegramBotAPI
 pip install steeper[ptb]         # python-telegram-bot v20+
 ```
 
-> **Need a backend?** Steeper is self-hosted. Run the Steeper backend (Docker Compose), create a superuser, and register a bot to get its `bot_id`. Point `base_url` at your instance. <!-- TODO: link to the backend repo / self-hosting guide -->
+> **Need a backend?** Steeper is self-hosted. Run the [Steeper platform](https://github.com/KarimovMurodilla/steeper-sdk) (`backend/` + `frontend/`, via Docker Compose), create a superuser, and register a bot to get its `bot_id`. Point `base_url` at your instance.
 
 Runnable examples for every framework live in [`examples/`](examples/). For the
 big picture — platform, library, and how they interact — see
