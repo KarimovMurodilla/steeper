@@ -145,16 +145,19 @@ Failures are never fatal: if the Steeper backend is unreachable or returns an er
 
 This library talks to the Steeper backend's **`/v1`** HTTP API:
 
+Both endpoints identify the bot by `bot_id` in the path and authenticate with the secret (`token_hash` = SHA-256 of the bot token) in the `x-telegram-bot-api-secret-token` header — the secret never appears in the URL.
+
 | Endpoint | Purpose |
 |----------|---------|
-| `POST /v1/communications/webhook/{bot_id}` | Forward incoming Telegram updates (auth via `x-telegram-bot-api-secret-token` = SHA-256 of the bot token) |
-| `POST /v1/communications/webhook/{token_hash}/bot-message` | Record outgoing bot messages |
+| `POST /v1/communications/webhook/{bot_id}` | Forward incoming Telegram updates |
+| `POST /v1/communications/webhook/{bot_id}/bot-message` | Record outgoing bot messages |
 
-| `steeper` (library) | Steeper backend API |
-|---------------------|---------------------|
-| `0.1.x`             | `v1`                |
+| `steeper` (library) | Steeper backend |
+|---------------------|-----------------|
+| `0.2.x`             | bot-message authenticated via header (current) |
+| `0.1.x`             | bot-message authenticated via `token_hash` in the URL path (legacy) |
 
-As long as the backend keeps the `v1` contract above, any `0.1.x` client works. Breaking changes to the contract will bump the API version (`/v2`) and the library minor version together.
+`0.2.0` changed the outgoing endpoint's contract, so a `0.2.x` client needs a backend built with the matching change (and vice-versa). See [`CHANGELOG.md`](CHANGELOG.md).
 
 ## License
 

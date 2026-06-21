@@ -38,9 +38,9 @@ Steeper — это платформа для работы с диалогами 
 
 - **bot_id** — UUID бота, выданный платформой при его регистрации.
 - **bot_token** — «сырой» токен бота от BotFather.
-- **token_hash** — `SHA-256(bot_token)` в hex. Используется и как секрет
-  аутентификации входящих апдейтов, и как идентификатор бота в пути эндпоинта
-  исходящих сообщений. Сырой токен по сети **не** передаётся.
+- **token_hash** — `SHA-256(bot_token)` в hex. Секрет аутентификации: для обоих
+  эндпоинтов передаётся в заголовке `x-telegram-bot-api-secret-token` и в URL не
+  попадает. Сырой токен по сети **не** передаётся.
 - **Update** — стандартный объект Telegram Update (как в Bot API).
 - **Chat / Message** — внутренние доменные сущности платформы (со своими UUID),
   в которые превращается Telegram-трафик.
@@ -59,7 +59,7 @@ flowchart LR
     end
 
     LIB -->|"POST /v1/communications/webhook/{bot_id}"| API[Steeper Platform\nFastAPI]
-    LIB -->|"POST /v1/communications/webhook/{token_hash}/bot-message"| API
+    LIB -->|"POST /v1/communications/webhook/{bot_id}/bot-message"| API
 
     API --> DB[(PostgreSQL)]
     API -->|publish| MQ{{RabbitMQ\nexchange: steeper.events}}
@@ -205,7 +205,8 @@ Body:   полный Telegram Update, как JSON (verbatim)
 **B. Исходящее сообщение бота**
 
 ```
-POST {base_url}/v1/communications/webhook/{token_hash}/bot-message
+POST {base_url}/v1/communications/webhook/{bot_id}/bot-message
+Header: x-telegram-bot-api-secret-token: <token_hash = SHA-256(bot_token)>
 Body:
 {
   "chat_id":    123456789,        // Telegram chat id
@@ -215,12 +216,13 @@ Body:
 }
 ```
 
-Ответы backend: `200`, `400`, `403`/`404` (неверный/неизвестный `token_hash`,
-бот или Telegram-пользователь не найдены).
+Ответы backend: `200`, `400` (битый payload), `403` (неверный секрет), `404`
+(бот или Telegram-пользователь не найдены).
 
-> Аутентификация построена на `token_hash`: для входящих он едет в заголовке и
-> сверяется с `bot.token_hash`; для исходящих он является частью пути и по нему
-> резолвится бот. **Сырой `bot_token` по сети не уходит.**
+> Аутентификация единообразна для обоих эндпоинтов: бот идентифицируется по
+> `bot_id` в пути, а секрет (`token_hash`) едет в заголовке
+> `x-telegram-bot-api-secret-token` и сверяется с `bot.token_hash`. Секрет в URL
+> не попадает. **Сырой `bot_token` по сети не уходит.**
 
 ### 5.2. Входящий поток (пользователь → бот → Steeper)
 
@@ -269,8 +271,8 @@ sequenceDiagram
 
     Bot->>TG: send_message / reply (любой API-вызов)
     Note over Bot: steeper перехватывает результат-Message
-    Bot->>API: POST /webhook/{token_hash}/bot-message
-    API->>API: резолв бота по token_hash, проверка active
+    Bot->>API: POST /webhook/{bot_id}/bot-message<br/>+ secret header
+    API->>API: резолв бота по bot_id, сверка token_hash, проверка active
     API->>DB: найти Telegram-пользователя по chat_id
     API->>DB: get/create Chat, сохранить Message (sender=bot)
     API-->>Bot: 200 {success: true}
@@ -343,15 +345,17 @@ await steeper.repository.record_outgoing(
 
 ## 7. Совместимость версий
 
-Библиотека общается с API версии **`/v1`**. Пока backend сохраняет контракт двух
-эндпоинтов из раздела 5.1, любой клиент `0.1.x` совместим с ним.
+Библиотека общается с API версии **`/v1`**. Контракт двух эндпоинтов из раздела
+5.1 должен совпадать на клиенте и сервере.
 
-| `steeper` (библиотека) | Steeper backend API |
-|------------------------|---------------------|
-| `0.1.x`                | `v1`                |
+| `steeper` (библиотека) | Steeper backend |
+|------------------------|-----------------|
+| `0.2.x`                | bot-message с секретом в заголовке (актуально) |
+| `0.1.x`                | bot-message с `token_hash` в пути URL (legacy) |
 
-Ломающие изменения контракта поднимут версию API (`/v2`) и минорную версию
-библиотеки одновременно. Изменения отслеживаются в [`CHANGELOG.md`](../CHANGELOG.md).
+В `0.2.0` контракт исходящего эндпоинта изменился, поэтому клиент `0.2.x` требует
+backend с соответствующей правкой (и наоборот). Изменения отслеживаются в
+[`CHANGELOG.md`](../CHANGELOG.md).
 
 ---
 

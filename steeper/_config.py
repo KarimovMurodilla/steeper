@@ -67,9 +67,9 @@ class SteeperConfig:
 
     @property
     def bot_message_url(self) -> str:
-        return (
-            f"{self._base}/v1/communications/webhook/{quote(self.token_hash, safe='')}/bot-message"
-        )
+        # The secret (token_hash) travels in the x-telegram-bot-api-secret-token
+        # header, not the URL — same scheme as the incoming webhook endpoint.
+        return f"{self._base}/v1/communications/webhook/{quote(self.bot_id, safe='')}/bot-message"
 
     def secret_matches(self, candidate: str) -> bool:
         """Constant-time comparison helper for the auth secret."""
