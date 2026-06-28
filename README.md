@@ -211,8 +211,6 @@ Failures are never fatal: if the Steeper backend is unreachable or returns an er
 
 ## Architecture
 
-<<<<<<< Updated upstream
-=======
 ```mermaid
 flowchart LR
     TG[Telegram] -->|update| BOT[Third-party bot\n+ steeper middleware]
@@ -352,17 +350,15 @@ secret (`token_hash` = SHA-256 of the bot token) in the
 `x-telegram-bot-api-secret-token` header — the secret never appears in the URL, and
 the **raw `bot_token` is never sent over the network**.
 
->>>>>>> Stashed changes
 | Endpoint | Purpose |
 |----------|---------|
 | `POST /v1/communications/webhook/{bot_id}` | Forward incoming Telegram updates (auth via `x-telegram-bot-api-secret-token` = SHA-256 of the bot token) |
 | `POST /v1/communications/webhook/{token_hash}/bot-message` | Record outgoing bot messages |
 
-<<<<<<< Updated upstream
 | `steeper` (library) | Steeper backend API |
 |---------------------|---------------------|
 | `0.1.x`             | `v1`                |
-=======
+
 **A. Incoming update**
 
 ```
@@ -478,7 +474,6 @@ contract above must match on the client and the server.
 |---------------------|-----------------|
 | `0.2.x`             | bot-message authenticated via header (current) |
 | `0.1.x`             | bot-message authenticated via `token_hash` in the URL path (legacy) |
->>>>>>> Stashed changes
 
 As long as the backend keeps the `v1` contract above, any `0.1.x` client works. Breaking changes to the contract will bump the API version (`/v2`) and the library minor version together.
 
