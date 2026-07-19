@@ -63,3 +63,7 @@ def test_no_warning_for_localhost_http(caplog: pytest.LogCaptureFixture) -> None
     with caplog.at_level("WARNING", logger="steeper"):
         SteeperConfig(base_url="http://localhost:8000", bot_id=BOT_ID, bot_token=BOT_TOKEN)
     assert not caplog.records
+
+
+def test_repr_does_not_leak_bot_token() -> None:
+    assert BOT_TOKEN not in repr(_config())

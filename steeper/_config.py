@@ -3,7 +3,7 @@ from __future__ import annotations
 import hashlib
 import hmac
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from urllib.parse import quote, urlsplit
 
 logger = logging.getLogger("steeper")
@@ -23,7 +23,9 @@ class SteeperConfig:
 
     base_url: str
     bot_id: str
-    bot_token: str
+    # repr=False so the raw token can never leak via repr()/str() of the
+    # config — e.g. in tracebacks, logs, or debugger output.
+    bot_token: str = field(repr=False)
 
     def __post_init__(self) -> None:
         parts = urlsplit(self.base_url)
