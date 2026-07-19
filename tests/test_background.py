@@ -1,6 +1,7 @@
 import asyncio
+import threading
 
-from steeper._background import fire_and_forget
+from steeper._background import fire_and_forget, fire_and_forget_threadsafe
 
 
 async def test_runs_coroutine_to_completion() -> None:
@@ -28,3 +29,27 @@ def test_without_running_loop_drops_work_silently() -> None:
         raise AssertionError("should not run")
 
     fire_and_forget(work())
+
+
+def test_threadsafe_runs_coroutine_from_sync_context() -> None:
+    done = threading.Event()
+
+    async def work() -> None:
+        done.set()
+
+    fire_and_forget_threadsafe(work())
+    assert done.wait(timeout=2)
+
+
+def test_threadsafe_survives_exceptions() -> None:
+    async def boom() -> None:
+        raise RuntimeError("boom")
+
+    done = threading.Event()
+
+    async def work() -> None:
+        done.set()
+
+    fire_and_forget_threadsafe(boom())
+    fire_and_forget_threadsafe(work())
+    assert done.wait(timeout=2)

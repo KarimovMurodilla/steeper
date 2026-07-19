@@ -17,12 +17,11 @@ Usage::
 
 from __future__ import annotations
 
-import asyncio
 import json
 import logging
-import threading
 from typing import Any
 
+from steeper._background import fire_and_forget_threadsafe
 from steeper.repository import OutgoingMessageSnapshot, SteeperRepository, text_from_message_body
 
 logger = logging.getLogger("steeper.telebot")
@@ -39,65 +38,6 @@ except ImportError as _exc:
 
 _apihelper_orig: Any = None
 _token_repos: dict[str, SteeperRepository] = {}
-
-
-class _BackgroundLoop:
-    """A single daemon thread running an asyncio loop for fire-and-forget work.
-
-    Sync telebot dispatches handlers and API calls on worker threads that have no
-    running event loop. Rather than block each call with ``asyncio.run`` (which
-    would stall the bot for the full Steeper round-trip and spin up a fresh loop
-    every time), we run all forwarding on one long-lived background loop. This
-    keeps the bot responsive even when the backend is slow or unreachable, and
-    lets the ``httpx.AsyncClient`` stay bound to a single stable loop.
-    """
-
-    def __init__(self) -> None:
-        self._loop: asyncio.AbstractEventLoop | None = None
-        self._lock = threading.Lock()
-
-    def _ensure_loop(self) -> asyncio.AbstractEventLoop:
-        if self._loop is not None:
-            return self._loop
-        with self._lock:
-            if self._loop is None:
-                loop = asyncio.new_event_loop()
-                thread = threading.Thread(
-                    target=loop.run_forever,
-                    name="steeper-telebot",
-                    daemon=True,
-                )
-                thread.start()
-                self._loop = loop
-        return self._loop
-
-    def submit(self, coro: Any) -> None:
-        """Schedule ``coro`` on the background loop without waiting for it."""
-        try:
-            loop = self._ensure_loop()
-            future = asyncio.run_coroutine_threadsafe(coro, loop)
-        except Exception:
-            # Never let scheduling failures break the bot's own call.
-            logger.debug("Failed to schedule Steeper forward", exc_info=True)
-            return
-
-        def _retrieve(fut: Any) -> None:
-            # Retrieve the result so exceptions are swallowed-and-logged here
-            # instead of surfacing as "exception was never retrieved" warnings.
-            try:
-                fut.result()
-            except Exception:
-                logger.debug("Steeper forward failed", exc_info=True)
-
-        future.add_done_callback(_retrieve)
-
-
-_background_loop = _BackgroundLoop()
-
-
-def _run_async(coro: Any) -> None:
-    """Fire-and-forget an async coroutine from sync context, never blocking."""
-    _background_loop.submit(coro)
 
 
 def _telebot_snapshots_from_result(result: Any) -> list[OutgoingMessageSnapshot]:
@@ -155,7 +95,7 @@ def _ensure_apihelper_patch() -> None:
             repo = _token_repos.get(token)
             if repo is not None:
                 for snap in _telebot_snapshots_from_result(result):
-                    _run_async(repo.record_outgoing(snap))
+                    fire_and_forget_threadsafe(repo.record_outgoing(snap))
         except Exception:
             # Logging to Steeper must never break the bot's own API call.
             logger.debug("Failed to log outgoing telebot message", exc_info=True)
@@ -206,7 +146,7 @@ def _wrap_process_new_updates(bot: _telebot.TeleBot, repository: SteeperReposito
             except Exception:
                 logger.debug("Failed to build update payload", exc_info=True)
                 continue
-            _run_async(repository.forward_update(raw))
+            fire_and_forget_threadsafe(repository.forward_update(raw))
         return orig(updates)
 
     bot.process_new_updates = patched  # type: ignore[assignment]
