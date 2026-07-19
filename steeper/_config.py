@@ -69,9 +69,7 @@ class SteeperConfig:
 
     @property
     def bot_message_url(self) -> str:
-        return (
-            f"{self._base}/v1/communications/webhook/{quote(self.token_hash, safe='')}/bot-message"
-        )
+        return f"{self._base}/v1/communications/webhook/{quote(self.bot_id, safe='')}/bot-message"
 
     def secret_matches(self, candidate: str) -> bool:
         """Constant-time comparison helper for the auth secret."""

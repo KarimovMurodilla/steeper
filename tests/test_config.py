@@ -22,10 +22,10 @@ def test_webhook_url_uses_bot_id_and_strips_trailing_slash() -> None:
     assert cfg.webhook_url == f"https://api.example.com/v1/communications/webhook/{BOT_ID}"
 
 
-def test_bot_message_url_uses_token_hash() -> None:
+def test_bot_message_url_uses_bot_id() -> None:
     cfg = _config()
     assert cfg.bot_message_url == (
-        f"https://api.example.com/v1/communications/webhook/{cfg.token_hash}/bot-message"
+        f"https://api.example.com/v1/communications/webhook/{BOT_ID}/bot-message"
     )
 
 

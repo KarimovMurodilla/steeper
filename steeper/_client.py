@@ -23,9 +23,8 @@ class SteeperClient:
     def _redact(self, message: str) -> str:
         """Strip the auth secret from text headed for the logs.
 
-        The bot-message endpoint carries ``token_hash`` in its URL path, so a
-        raw httpx error (which includes the request URL) would otherwise leak
-        the auth secret into log files.
+        ``token_hash`` is sent as a request header, but redact it defensively
+        so it can never leak into log files via an httpx error string.
         """
         return message.replace(self._config.token_hash, "***")
 
@@ -61,6 +60,9 @@ class SteeperClient:
             resp = await self._http.post(
                 self._config.bot_message_url,
                 json=payload,
+                headers={
+                    "x-telegram-bot-api-secret-token": self._config.token_hash,
+                },
             )
             resp.raise_for_status()
         except httpx.HTTPError as exc:

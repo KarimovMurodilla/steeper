@@ -41,7 +41,9 @@ async def test_log_bot_message_posts_expected_fields() -> None:
 
     import json
 
-    payload = json.loads(route.calls.last.request.content)
+    request = route.calls.last.request
+    assert request.headers["x-telegram-bot-api-secret-token"] == client._config.token_hash
+    payload = json.loads(request.content)
     assert payload == {"chat_id": 42, "text": "hello", "message_id": 7, "date": 1700000000}
     await client.close()
 
