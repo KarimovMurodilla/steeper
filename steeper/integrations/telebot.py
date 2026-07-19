@@ -17,11 +17,11 @@ Usage::
 
 from __future__ import annotations
 
-import asyncio
 import json
 import logging
 from typing import Any
 
+from steeper._background import fire_and_forget_threadsafe
 from steeper.repository import OutgoingMessageSnapshot, SteeperRepository, text_from_message_body
 
 logger = logging.getLogger("steeper.telebot")
@@ -38,15 +38,6 @@ except ImportError as _exc:
 
 _apihelper_orig: Any = None
 _token_repos: dict[str, SteeperRepository] = {}
-
-
-def _run_async(coro: Any) -> None:
-    """Fire-and-forget an async coroutine from sync context."""
-    try:
-        loop = asyncio.get_running_loop()
-        loop.create_task(coro)
-    except RuntimeError:
-        asyncio.run(coro)
 
 
 def _telebot_snapshots_from_result(result: Any) -> list[OutgoingMessageSnapshot]:
@@ -100,11 +91,14 @@ def _ensure_apihelper_patch() -> None:
     ) -> Any:
         assert _apihelper_orig is not None
         result = _apihelper_orig(token, method_name, method, params, files)
-        repo = _token_repos.get(token)
-        if repo is None:
-            return result
-        for snap in _telebot_snapshots_from_result(result):
-            _run_async(repo.record_outgoing(snap))
+        try:
+            repo = _token_repos.get(token)
+            if repo is not None:
+                for snap in _telebot_snapshots_from_result(result):
+                    fire_and_forget_threadsafe(repo.record_outgoing(snap))
+        except Exception:
+            # Logging to Steeper must never break the bot's own API call.
+            logger.debug("Failed to log outgoing telebot message", exc_info=True)
         return result
 
     _apihelper._make_request = _wrapped  # type: ignore[assignment]
@@ -152,7 +146,7 @@ def _wrap_process_new_updates(bot: _telebot.TeleBot, repository: SteeperReposito
             except Exception:
                 logger.debug("Failed to build update payload", exc_info=True)
                 continue
-            _run_async(repository.forward_update(raw))
+            fire_and_forget_threadsafe(repository.forward_update(raw))
         return orig(updates)
 
     bot.process_new_updates = patched  # type: ignore[assignment]

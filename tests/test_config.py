@@ -22,10 +22,10 @@ def test_webhook_url_uses_bot_id_and_strips_trailing_slash() -> None:
     assert cfg.webhook_url == f"https://api.example.com/v1/communications/webhook/{BOT_ID}"
 
 
-def test_bot_message_url_uses_token_hash() -> None:
+def test_bot_message_url_uses_bot_id() -> None:
     cfg = _config()
     assert cfg.bot_message_url == (
-        f"https://api.example.com/v1/communications/webhook/{cfg.token_hash}/bot-message"
+        f"https://api.example.com/v1/communications/webhook/{BOT_ID}/bot-message"
     )
 
 
@@ -63,3 +63,7 @@ def test_no_warning_for_localhost_http(caplog: pytest.LogCaptureFixture) -> None
     with caplog.at_level("WARNING", logger="steeper"):
         SteeperConfig(base_url="http://localhost:8000", bot_id=BOT_ID, bot_token=BOT_TOKEN)
     assert not caplog.records
+
+
+def test_repr_does_not_leak_bot_token() -> None:
+    assert BOT_TOKEN not in repr(_config())

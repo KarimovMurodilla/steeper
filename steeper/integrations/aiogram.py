@@ -22,6 +22,7 @@ from collections.abc import Awaitable, Callable
 from typing import Any
 from weakref import WeakKeyDictionary
 
+from steeper._background import fire_and_forget
 from steeper.repository import OutgoingMessageSnapshot, SteeperRepository, text_from_message_body
 
 logger = logging.getLogger("steeper.aiogram")
@@ -37,7 +38,11 @@ except ImportError as _exc:
 
 
 class _IncomingMiddleware(BaseMiddleware):
-    """Outer middleware on ``Update`` — forwards raw updates to Steeper."""
+    """Outer middleware on ``Update`` — forwards raw updates to Steeper.
+
+    Forwarding is fire-and-forget: a slow or unreachable Steeper backend must
+    neither delay the bot's own handler nor lose the update.
+    """
 
     def __init__(self, repository: SteeperRepository) -> None:
         self._repository = repository
@@ -48,8 +53,12 @@ class _IncomingMiddleware(BaseMiddleware):
         event: Update,
         data: dict[str, Any],
     ) -> Any:
-        raw = event.model_dump(mode="json")
-        await self._repository.forward_update(raw)
+        try:
+            raw = event.model_dump(mode="json")
+        except Exception:
+            logger.debug("Failed to build update payload", exc_info=True)
+        else:
+            fire_and_forget(self._repository.forward_update(raw))
         return await handler(event, data)
 
 
@@ -103,10 +112,8 @@ def _wrap_bot_api_call(bot: Bot, repository: SteeperRepository) -> None:
         result = await _orig_bot_call(self, method, request_timeout=request_timeout)
         repo = _bot_repos.get(self)
         if repo is not None:
-            try:
-                await _log_aiogram_outgoing(repo, result)
-            except Exception:
-                logger.debug("Failed to log outgoing message", exc_info=True)
+            # Fire-and-forget so logging never delays the bot's own API call.
+            fire_and_forget(_log_aiogram_outgoing(repo, result))
         return result
 
     Bot.__call__ = patched  # type: ignore[method-assign]

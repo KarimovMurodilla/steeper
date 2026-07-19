@@ -1,127 +1,129 @@
-# Steeper — обзор экосистемы
+# Steeper — ecosystem overview
 
-Документ описывает, **что такое Steeper**, из чего он состоит, как устроены
-две его части — **платформа (backend)** и **клиентская библиотека `steeper`** —
-и **как они взаимодействуют** между собой.
+This document explains **what Steeper is**, what it consists of, how its two
+parts — the **platform (backend)** and the **`steeper` client library** — are
+built, and **how they interact** with each other.
 
-> TL;DR: `steeper` — это тонкий middleware, который встраивается в любого
-> Telegram-бота (aiogram / telebot / python-telegram-bot) и зеркалит весь
-> диалог — входящие апдейты и исходящие ответы бота — в backend Steeper по
-> HTTP. Backend сохраняет переписку, строит CRM/аналитику и раздаёт события
-> в реальном времени операторской панели.
-
----
-
-## 1. Что такое Steeper
-
-Steeper — это платформа для работы с диалогами Telegram-ботов: единое место,
-где видно всю переписку пользователей с ботами, можно отвечать от лица бота,
-вести CRM, рассылки и смотреть аналитику.
-
-Чтобы платформа «видела» трафик бота, его не нужно переписывать: достаточно
-подключить библиотеку `steeper`, которая перехватывает сообщения на уровне
-фреймворка и пересылает их в backend.
-
-Экосистема состоит из трёх частей:
-
-| Часть | Что это | Где живёт | Аудитория |
-|-------|---------|-----------|-----------|
-| **Steeper Platform (backend)** | FastAPI-сервис: хранение диалогов, CRM, аналитика, realtime, рассылки. Это «сервер», к которому всё подключается. | Self-hosted (Docker Compose) | Тот, кто разворачивает Steeper |
-| **`steeper` (библиотека)** | Telegram-bot middleware. Перехватывает апдейты и ответы бота, шлёт их в backend по HTTP. | PyPI (`pip install steeper[...]`) | Разработчик стороннего бота |
-| **Операторская панель (frontend)** | Веб-интерфейс: чаты, ответы, аналитика. Получает события по WebSocket. | Self-hosted рядом с backend | Операторы / менеджеры |
-
-Этот репозиторий — **только библиотека `steeper`**. Backend и панель живут в
-своих репозиториях; здесь они описаны ровно настолько, насколько нужно для
-понимания интеграции.
-
-### Глоссарий
-
-- **bot_id** — UUID бота, выданный платформой при его регистрации.
-- **bot_token** — «сырой» токен бота от BotFather.
-- **token_hash** — `SHA-256(bot_token)` в hex. Используется и как секрет
-  аутентификации входящих апдейтов, и как идентификатор бота в пути эндпоинта
-  исходящих сообщений. Сырой токен по сети **не** передаётся.
-- **Update** — стандартный объект Telegram Update (как в Bot API).
-- **Chat / Message** — внутренние доменные сущности платформы (со своими UUID),
-  в которые превращается Telegram-трафик.
+> TL;DR: `steeper` is a thin middleware that plugs into any Telegram bot
+> (aiogram / telebot / python-telegram-bot) and mirrors the entire
+> conversation — incoming updates and the bot's outgoing replies — to the
+> Steeper backend over HTTP. The backend stores the conversation, builds
+> CRM/analytics, and streams real-time events to an operator panel.
 
 ---
 
-## 2. Архитектура верхнего уровня
+## 1. What is Steeper
+
+Steeper is a platform for working with Telegram bot conversations: a single
+place where you can see all user–bot dialogue, reply on behalf of the bot, run
+CRM and broadcasts, and view analytics.
+
+For the platform to "see" a bot's traffic, the bot doesn't need to be rewritten:
+you just plug in the `steeper` library, which intercepts messages at the
+framework level and forwards them to the backend.
+
+The ecosystem consists of three parts:
+
+| Part | What it is | Where it lives | Audience |
+|------|------------|----------------|----------|
+| **Steeper Platform (backend)** | FastAPI service: conversation storage, CRM, analytics, realtime, broadcasts. The "server" everything connects to. | Self-hosted (Docker Compose) | Whoever deploys Steeper |
+| **`steeper` (library)** | Telegram bot middleware. Intercepts updates and bot replies, sends them to the backend over HTTP. | PyPI (`pip install steeper[...]`) | Third-party bot developer |
+| **Operator panel (frontend)** | Web UI: chats, replies, analytics. Receives events over WebSocket. | Self-hosted alongside the backend | Operators / managers |
+
+This repository is **only the `steeper` library**. The backend and panel live in
+their own repositories; they are described here only as much as needed to
+understand the integration.
+
+### Glossary
+
+- **bot_id** — the bot's UUID, issued by the platform when the bot is registered.
+- **bot_token** — the raw bot token from BotFather.
+- **token_hash** — `SHA-256(bot_token)` in hex. The authentication secret: for
+  both endpoints it is sent in the `x-telegram-bot-api-secret-token` header and
+  never appears in the URL. The raw token is **never** sent over the network.
+- **Update** — the standard Telegram Update object (as in the Bot API).
+- **Chat / Message** — the platform's internal domain entities (with their own
+  UUIDs) that Telegram traffic is turned into.
+
+---
+
+## 2. High-level architecture
 
 ```mermaid
 flowchart LR
-    TG[Telegram] -->|update| BOT[Сторонний бот\n+ steeper middleware]
-    BOT -->|ответ| TG
+    TG[Telegram] -->|update| BOT[Third-party bot\n+ steeper middleware]
+    BOT -->|reply| TG
 
-    subgraph CLIENT[Процесс бота]
+    subgraph CLIENT[Bot process]
         BOT --- LIB[steeper library]
     end
 
     LIB -->|"POST /v1/communications/webhook/{bot_id}"| API[Steeper Platform\nFastAPI]
-    LIB -->|"POST /v1/communications/webhook/{token_hash}/bot-message"| API
+    LIB -->|"POST /v1/communications/webhook/{bot_id}/bot-message"| API
 
     API --> DB[(PostgreSQL)]
     API -->|publish| MQ{{RabbitMQ\nexchange: steeper.events}}
     MQ --> API
-    API -->|WebSocket| UI[Операторская панель]
+    API -->|WebSocket| UI[Operator panel]
 ```
 
-Ключевая идея: **библиотека ничего не знает о внутренней модели платформы**.
-Она общается только с двумя HTTP-эндпоинтами и передаёт данные в
-Telegram-формате. Всю доменную логику (чаты, пользователи, события) делает
-backend.
+The key idea: **the library knows nothing about the platform's internal model.**
+It talks to just two HTTP endpoints and passes data in Telegram format. All
+domain logic (chats, users, events) is done by the backend.
 
 ---
 
 ## 3. Steeper Platform (backend)
 
-FastAPI-приложение с модульной доменной архитектурой. Подробности — в README и
-`CLAUDE.md` репозитория backend; здесь — обзор, важный для интеграции.
+A FastAPI application with a modular domain architecture. Full details live in
+the backend repository's README and `CLAUDE.md`; here is the overview relevant to
+the integration.
 
-### Что делает
+### What it does
 
-- Принимает входящие Telegram-апдейты (от прямого вебхука Telegram **или** от
-  библиотеки `steeper`, выступающей прокси) и сохраняет их **дословно**.
-- Превращает сообщения в доменные `Chat` / `Message`, ведёт CRM
-  (Telegram-пользователи).
-- Принимает исходящие сообщения бота и сохраняет их как часть диалога.
-- Публикует события в реальном времени в RabbitMQ и раздаёт их панели по
+- Accepts incoming Telegram updates (from a direct Telegram webhook **or** from
+  the `steeper` library acting as a proxy) and stores them **verbatim**.
+- Turns messages into domain `Chat` / `Message` entities and maintains CRM
+  (Telegram users).
+- Accepts the bot's outgoing messages and stores them as part of the
+  conversation.
+- Publishes real-time events to RabbitMQ and streams them to the panel over
   WebSocket.
-- Даёт API для операторов: список чатов, история, ответы, аналитика, рассылки.
+- Provides an API for operators: chat list, history, replies, analytics,
+  broadcasts.
 
-### Технологический стек
+### Technology stack
 
 - Python 3.13, FastAPI, async SQLAlchemy + asyncpg, PostgreSQL (+ PostGIS).
-- Redis (кэш, JTI-стор токенов), RabbitMQ + FastStream (события), Celery (задачи).
-- JWT-аутентификация операторов, Argon2 для паролей, Fernet-шифрование токенов
-  ботов в БД.
-- Всё поднимается через Docker Compose; все API-маршруты под префиксом `/v1/`.
+- Redis (cache, token JTI store), RabbitMQ + FastStream (events), Celery (tasks).
+- JWT authentication for operators, Argon2 for passwords, Fernet encryption of
+  bot tokens in the DB.
+- Everything runs via Docker Compose; all API routes are under the `/v1/` prefix.
 
-### Домен `communication` (точка интеграции)
+### The `communication` domain (the integration point)
 
-Именно сюда обращается библиотека. Внутри:
+This is exactly where the library connects. Inside:
 
-- `routers.py` — два HTTP-эндпоинта (вебхук и bot-message).
-- `usecases/handle_webhook.py` — обработка входящего апдейта.
-- `usecases/log_bot_message.py` — сохранение исходящего сообщения бота.
-- `services/telegram_update_classifier.py` — классификация типа апдейта/контента.
+- `routers.py` — the two HTTP endpoints (webhook and bot-message).
+- `usecases/handle_webhook.py` — handling an incoming update.
+- `usecases/log_bot_message.py` — storing an outgoing bot message.
+- `services/telegram_update_classifier.py` — classifying the update/content type.
 - `repositories/` — `chat`, `message`, `telegram_update`.
 
 ### Realtime
 
-Backend публикует события в **topic-exchange `steeper.events`** с routing key
-`bot.{bot_id}.chat.{chat_id}.<event>`. Операторская панель подключается по
-WebSocket, проходит аутентификацию JWT и подписывается на `chat_id` и/или
-`bot_id`. Типы событий: `chat.created`, `chat.message.created`. Конверт события
+The backend publishes events to the **`steeper.events` topic exchange** with
+routing key `bot.{bot_id}.chat.{chat_id}.<event>`. The operator panel connects
+over WebSocket, authenticates with JWT, and subscribes to a `chat_id` and/or
+`bot_id`. Event types: `chat.created`, `chat.message.created`. The event envelope
 (`WSDownlinkEnvelope`): `{version, event, bot_id, chat_id, timestamp, data}`.
 
 ---
 
-## 4. Библиотека `steeper`
+## 4. The `steeper` library
 
-Тонкий middleware, который встраивается в бота и зеркалит трафик в backend.
-Поддерживает три фреймворка через extras:
+A thin middleware that plugs into a bot and mirrors traffic to the backend. It
+supports three frameworks via extras:
 
 ```bash
 pip install steeper[aiogram]   # aiogram v3
@@ -129,176 +131,178 @@ pip install steeper[telebot]   # pyTelegramBotAPI
 pip install steeper[ptb]       # python-telegram-bot v20+
 ```
 
-### Публичный API
+### Public API
 
 ```python
-from steeper.integrations.aiogram import SteeperMiddleware   # либо .telebot / .ptb
+from steeper.integrations.aiogram import SteeperMiddleware   # or .telebot / .ptb
 
 steeper = SteeperMiddleware(
-    base_url="http://localhost:8000",   # адрес backend Steeper
-    bot_id="00000000-0000-0000-0000-000000000000",  # UUID бота из платформы
-    bot_token="123456:ABC-DEF...",      # токен от BotFather
-    timeout=10.0,                        # необязательно
+    base_url="http://localhost:8000",   # Steeper backend address
+    bot_id="00000000-0000-0000-0000-000000000000",  # bot UUID from the platform
+    bot_token="123456:ABC-DEF...",      # token from BotFather
+    timeout=10.0,                        # optional
 )
-steeper.setup(...)   # сигнатура зависит от фреймворка (см. ниже)
+steeper.setup(...)   # signature depends on the framework (see below)
 ```
 
-Дополнительно доступны (для ручных сценариев):
+Additionally available (for manual scenarios):
 
-- `steeper.SteeperConfig` — иммутабельный конфиг + валидация и вычисление
-  `token_hash`, URL эндпоинтов.
-- `steeper.SteeperRepository` — доменно-ориентированный слой:
+- `steeper.SteeperConfig` — immutable config + validation, computes `token_hash`
+  and the endpoint URLs.
+- `steeper.SteeperRepository` — domain-oriented layer:
   `forward_update(...)`, `record_outgoing(...)`.
-- `steeper.SteeperClient` — низкоуровневый async HTTP-клиент (httpx).
-- `steeper.OutgoingMessageSnapshot` — нормализованное исходящее сообщение.
+- `steeper.SteeperClient` — low-level async HTTP client (httpx).
+- `steeper.OutgoingMessageSnapshot` — a normalized outgoing message.
 
-### Внутреннее устройство
+### Internal layout
 
 ```
 steeper/
-├── _config.py        # SteeperConfig: валидация base_url, token_hash, URL'ы эндпоинтов
-├── _client.py        # SteeperClient: httpx, отправка, редакция секрета в логах
+├── _config.py        # SteeperConfig: validates base_url, token_hash, endpoint URLs
+├── _client.py        # SteeperClient: httpx, sending, secret redaction in logs
 ├── repository.py     # SteeperRepository + OutgoingMessageSnapshot
 └── integrations/
-    ├── aiogram.py     # SteeperMiddleware для aiogram v3
-    ├── telebot.py     # SteeperMiddleware для pyTelegramBotAPI
-    └── ptb.py         # SteeperMiddleware для python-telegram-bot v20+
+    ├── aiogram.py     # SteeperMiddleware for aiogram v3
+    ├── telebot.py     # SteeperMiddleware for pyTelegramBotAPI
+    └── ptb.py         # SteeperMiddleware for python-telegram-bot v20+
 ```
 
-### Как перехватываются сообщения по фреймворкам
+### How messages are intercepted per framework
 
-| Фреймворк | Входящие | Исходящие | Модель отправки |
-|-----------|----------|-----------|-----------------|
-| **aiogram v3** | outer-middleware на `Update` | обёртка над `Bot.__call__` (логируется любой результат-`Message`, включая медиа-группы) | awaited inline |
-| **python-telegram-bot** | хук на обработку апдейта | обёртка над `Bot._post` (JSON, декодируемый в `Message`) | awaited inline |
-| **telebot** | middleware/хендлер | обёртка над `apihelper._make_request` для токена бота | фоновые задачи |
+| Framework | Incoming | Outgoing | Dispatch model |
+|-----------|----------|----------|----------------|
+| **aiogram v3** | outer middleware on `Update` | wrapper around `Bot.__call__` (any `Message` result is logged, including media groups) | awaited inline |
+| **python-telegram-bot** | hook on update processing | wrapper around `Bot._post` (JSON decodable to `Message`) | awaited inline |
+| **telebot** | middleware/handler | wrapper around `apihelper._make_request` for the bot token | background tasks |
 
-> Важное следствие по латентности: для **aiogram** и **PTB** обращения к backend
-> ожидаются inline, поэтому недоступный/медленный backend может добавлять
-> задержку до `timeout` (10 с по умолчанию) на апдейт. **telebot** шлёт их как
-> фоновые задачи.
+> Latency note: for **aiogram** and **PTB** the calls to the backend are awaited
+> inline, so an unreachable/slow backend can add latency up to `timeout` (10s by
+> default) per update. **telebot** sends them as background tasks.
 
 ---
 
-## 5. Как они взаимодействуют
+## 5. How they interact
 
-### 5.0. Предусловие: регистрация бота
+### 5.0. Prerequisite: register the bot
 
-1. Подними backend Steeper (Docker Compose), создай суперюзера.
-2. Зарегистрируй бота в платформе — получишь его **`bot_id`** (UUID). Backend
-   хранит `token_hash` бота для аутентификации.
-3. В коде бота передай `base_url`, `bot_id`, `bot_token` в `SteeperMiddleware`.
+1. Bring up the Steeper backend (Docker Compose) and create a superuser.
+2. Register the bot in the platform — you'll get its **`bot_id`** (UUID). The
+   backend stores the bot's `token_hash` for authentication.
+3. In the bot's code, pass `base_url`, `bot_id`, and `bot_token` to
+   `SteeperMiddleware`.
 
-### 5.1. HTTP-контракт (всё взаимодействие — это два запроса)
+### 5.1. The HTTP contract (the whole interaction is two requests)
 
-**A. Входящий апдейт**
+**A. Incoming update**
 
 ```
 POST {base_url}/v1/communications/webhook/{bot_id}
 Header: x-telegram-bot-api-secret-token: <token_hash = SHA-256(bot_token)>
-Body:   полный Telegram Update, как JSON (verbatim)
+Body:   the full Telegram Update, as JSON (verbatim)
 ```
 
-Ответы backend: `200` (success), `400` (битый payload), `403` (неверный секрет),
-`404` (бот не найден).
+Backend responses: `200` (success), `400` (malformed payload), `403` (invalid
+secret), `404` (bot not found).
 
-**B. Исходящее сообщение бота**
+**B. Outgoing bot message**
 
 ```
-POST {base_url}/v1/communications/webhook/{token_hash}/bot-message
+POST {base_url}/v1/communications/webhook/{bot_id}/bot-message
+Header: x-telegram-bot-api-secret-token: <token_hash = SHA-256(bot_token)>
 Body:
 {
   "chat_id":    123456789,        // Telegram chat id
-  "text":       "видимый текст или подпись",
+  "text":       "visible text or caption",
   "message_id": 42,               // Telegram message id
-  "date":       1700000000        // Unix ts; если не задан — клиент проставит текущее время
+  "date":       1700000000        // Unix ts; if omitted, the client sets the current time
 }
 ```
 
-Ответы backend: `200`, `400`, `403`/`404` (неверный/неизвестный `token_hash`,
-бот или Telegram-пользователь не найдены).
+Backend responses: `200`, `400` (malformed payload), `403` (invalid secret),
+`404` (bot or Telegram user not found).
 
-> Аутентификация построена на `token_hash`: для входящих он едет в заголовке и
-> сверяется с `bot.token_hash`; для исходящих он является частью пути и по нему
-> резолвится бот. **Сырой `bot_token` по сети не уходит.**
+> Authentication is based on `token_hash`: for both endpoints the bot is
+> identified by `bot_id` in the path, and the secret travels in the
+> `x-telegram-bot-api-secret-token` header, where it is checked against
+> `bot.token_hash`. **The raw `bot_token` never leaves the process.**
 
-### 5.2. Входящий поток (пользователь → бот → Steeper)
+### 5.2. Incoming flow (user → bot → Steeper)
 
 ```mermaid
 sequenceDiagram
     participant TG as Telegram
-    participant Bot as Бот (+ steeper)
+    participant Bot as Bot (+ steeper)
     participant API as Steeper backend
     participant DB as PostgreSQL
     participant MQ as RabbitMQ
-    participant UI as Панель (WS)
+    participant UI as Panel (WS)
 
     TG->>Bot: Update
-    Note over Bot: steeper middleware<br/>срабатывает ДО хендлеров
+    Note over Bot: steeper middleware<br/>runs BEFORE handlers
     Bot->>API: POST /webhook/{bot_id}<br/>+ secret header, raw Update
-    Bot->>Bot: твои хендлеры выполняются как обычно
-    API->>API: проверка bot_id + token_hash
-    API->>DB: сохранить raw update (идемпотентно по bot_id+update_id)
-    alt это сообщение и бот активен
-        API->>DB: upsert Telegram-пользователя (CRM)
-        API->>DB: get/create Chat, сохранить Message (sender=user)
-        API->>MQ: publish chat.created (если чат новый)
+    Bot->>Bot: your handlers run as usual
+    API->>API: verify bot_id + token_hash
+    API->>DB: store raw update (idempotent by bot_id+update_id)
+    alt it's a message and the bot is active
+        API->>DB: upsert Telegram user (CRM)
+        API->>DB: get/create Chat, store Message (sender=user)
+        API->>MQ: publish chat.created (if the chat is new)
         API->>MQ: publish chat.message.created
-        MQ-->>UI: событие по WebSocket
+        MQ-->>UI: event over WebSocket
     end
     API-->>Bot: 200 {success: true}
 ```
 
-Особенности backend:
+Backend specifics:
 
-- **Дословное хранение и идемпотентность.** Каждый апдейт сохраняется целиком
-  (даже типы, которые пока не обрабатываются). Запись идемпотентна по
-  `(bot_id, update_id)`, поэтому ретраи Telegram не создают дублей.
-- **В доменный чат превращаются** только `message` / `edited_message` с
-  отправителем. Остальное просто логируется.
-- **Неактивный бот:** апдейт сохранится, но воркфлоу чата не запустится.
+- **Verbatim storage and idempotency.** Every update is stored in full (even
+  types not yet handled). The write is idempotent by `(bot_id, update_id)`, so
+  Telegram retries don't create duplicates.
+- **Only `message` / `edited_message`** with a sender are turned into a domain
+  chat. Everything else is simply logged.
+- **Inactive bot:** the update is stored, but the chat workflow does not run.
 
-### 5.3. Исходящий поток (бот ответил → Steeper)
+### 5.3. Outgoing flow (bot replied → Steeper)
 
 ```mermaid
 sequenceDiagram
-    participant Bot as Бот (+ steeper)
+    participant Bot as Bot (+ steeper)
     participant TG as Telegram
     participant API as Steeper backend
     participant DB as PostgreSQL
 
-    Bot->>TG: send_message / reply (любой API-вызов)
-    Note over Bot: steeper перехватывает результат-Message
-    Bot->>API: POST /webhook/{token_hash}/bot-message
-    API->>API: резолв бота по token_hash, проверка active
-    API->>DB: найти Telegram-пользователя по chat_id
-    API->>DB: get/create Chat, сохранить Message (sender=bot)
+    Bot->>TG: send_message / reply (any API call)
+    Note over Bot: steeper intercepts the Message result
+    Bot->>API: POST /webhook/{bot_id}/bot-message<br/>+ secret header
+    API->>API: resolve bot by bot_id, check token_hash, check active
+    API->>DB: find Telegram user by chat_id
+    API->>DB: get/create Chat, store Message (sender=bot)
     API-->>Bot: 200 {success: true}
 ```
 
-Важные нюансы исходящего потока:
+Important notes about the outgoing flow:
 
-- Эндпоинт `bot-message` **сохраняет** сообщение бота, но в текущей реализации
-  **не публикует** realtime-событие (в отличие от входящего потока и ответов,
-  отправленных оператором из панели).
-- Логирование исходящего требует, чтобы Telegram-пользователь уже существовал
-  (т.е. обычно у диалога уже был входящий апдейт). Иначе backend ответит `404`,
-  но для бота это **не фатально** (см. ниже).
+- The `bot-message` endpoint **stores** the bot's message but, in the current
+  implementation, **does not publish** a realtime event (unlike the incoming flow
+  and replies sent by an operator from the panel).
+- Logging an outgoing message requires that the Telegram user already exists
+  (i.e. the dialogue usually had an incoming update first). Otherwise the backend
+  responds `404`, but that is **not fatal** for the bot (see below).
 
-### 5.4. Гарантии и поведение библиотеки
+### 5.4. Library guarantees and behavior
 
-- **Никогда не ломает бота.** Если backend недоступен или вернул ошибку,
-  библиотека логирует `warning` и продолжает работу — твои хендлеры и ответы
-  пользователю не страдают.
-- **Безопасность логов.** `token_hash` вырезается из текста ошибок перед записью
-  в лог (чтобы секрет не утёк через URL в сообщении httpx).
-- **Предупреждение о plaintext.** Если `base_url` — это `http://` на не-локальный
-  хост, библиотека громко предупреждает: контент и секрет поедут незашифрованными.
-  В проде используй `https://`.
+- **Never breaks the bot.** If the backend is unreachable or returns an error,
+  the library logs a `warning` and keeps going — your handlers and replies to the
+  user are unaffected.
+- **Safe logs.** The `token_hash` is stripped from error text before logging (so
+  the secret can't leak via a URL in an httpx message).
+- **Plaintext warning.** If `base_url` is `http://` against a non-local host, the
+  library warns loudly: content and the secret would travel unencrypted. Use
+  `https://` in production.
 
 ---
 
-## 6. Быстрый старт (end-to-end)
+## 6. Quick start (end-to-end)
 
 ```python
 import asyncio
@@ -312,14 +316,14 @@ router = Router()
 
 @router.message(CommandStart())
 async def start(m: Message) -> None:
-    await m.answer("Hello!")        # этот ответ тоже улетит в Steeper
+    await m.answer("Hello!")        # this reply is mirrored to Steeper too
 
 async def main() -> None:
     bot = Bot(token=BOT_TOKEN)
     dp = Dispatcher(); dp.include_router(router)
     SteeperMiddleware(
         base_url="http://localhost:8000",
-        bot_id="<UUID из платформы>",
+        bot_id="<UUID from the platform>",
         bot_token=BOT_TOKEN,
     ).setup(dp, bot)
     await dp.start_polling(bot)
@@ -327,9 +331,10 @@ async def main() -> None:
 asyncio.run(main())
 ```
 
-Готовые примеры для всех трёх фреймворков — в каталоге [`examples/`](../examples/).
+Runnable examples for all three frameworks live in the [`examples/`](../examples/)
+directory.
 
-Ручное логирование (если обходишь обычный API фреймворка):
+Manual logging (if you bypass the framework's normal API):
 
 ```python
 from steeper.repository import OutgoingMessageSnapshot
@@ -341,25 +346,27 @@ await steeper.repository.record_outgoing(
 
 ---
 
-## 7. Совместимость версий
+## 7. Version compatibility
 
-Библиотека общается с API версии **`/v1`**. Пока backend сохраняет контракт двух
-эндпоинтов из раздела 5.1, любой клиент `0.1.x` совместим с ним.
+The library talks to the **`/v1`** API. As long as the backend keeps the
+two-endpoint contract from section 5.1, any `0.1.x` client is compatible with it.
 
-| `steeper` (библиотека) | Steeper backend API |
-|------------------------|---------------------|
-| `0.1.x`                | `v1`                |
+| `steeper` (library) | Steeper backend API |
+|---------------------|---------------------|
+| `0.1.x`             | `v1`                |
 
-Ломающие изменения контракта поднимут версию API (`/v2`) и минорную версию
-библиотеки одновременно. Изменения отслеживаются в [`CHANGELOG.md`](../CHANGELOG.md).
+Breaking changes to the contract will bump the API version (`/v2`) and the
+library minor version together. Changes are tracked in
+[`CHANGELOG.md`](../CHANGELOG.md).
 
 ---
 
-## 8. Кратко
+## 8. In brief
 
-- **Платформа (backend)** — сервер: хранит диалоги, ведёт CRM/аналитику,
-  раздаёт realtime. Self-hosted.
-- **Библиотека `steeper`** — клиент: встраивается в бота, зеркалит входящие и
-  исходящие сообщения в backend по двум HTTP-эндпоинтам.
-- **Связь между ними** — простой HTTP-контракт в Telegram-формате, с
-  аутентификацией по `token_hash` и принципом «backend упал — бот живёт».
+- **Platform (backend)** — the server: stores conversations, runs CRM/analytics,
+  streams realtime. Self-hosted.
+- **`steeper` library** — the client: plugs into a bot, mirrors incoming and
+  outgoing messages to the backend over two HTTP endpoints.
+- **The link between them** — a simple HTTP contract in Telegram format, with
+  `token_hash`-based authentication and a "backend is down → the bot lives on"
+  principle.

@@ -21,6 +21,7 @@ import logging
 import types
 from typing import Any
 
+from steeper._background import fire_and_forget
 from steeper.repository import OutgoingMessageSnapshot, SteeperRepository, text_from_message_body
 
 logger = logging.getLogger("steeper.ptb")
@@ -56,8 +57,15 @@ class _SteeperHandler(BaseHandler[Update, ContextTypes.DEFAULT_TYPE, None]):
         check_result: Any,
         context: ContextTypes.DEFAULT_TYPE,
     ) -> None:
-        raw = update.to_dict(recursive=True)
-        await self._repository.forward_update(raw)
+        # Fire-and-forget: PTB processes updates sequentially by default, so
+        # awaiting the Steeper round-trip here would stall the whole bot
+        # whenever the backend is slow or unreachable.
+        try:
+            raw = update.to_dict(recursive=True)
+        except Exception:
+            logger.debug("Failed to build update payload", exc_info=True)
+            return
+        fire_and_forget(self._repository.forward_update(raw))
 
     @staticmethod
     async def _noop(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -88,6 +96,11 @@ def _snapshot_from_ptb_message(message: Message) -> OutgoingMessageSnapshot:
     )
 
 
+async def _log_ptb_outgoing(bot: Any, repository: SteeperRepository, result: Any) -> None:
+    for msg in _messages_from_ptb_post_result(bot, result):
+        await repository.record_outgoing(_snapshot_from_ptb_message(msg))
+
+
 def _wrap_bot_post(application: Application, repository: SteeperRepository) -> None:  # type: ignore[type-arg]
     """Wrap ``Bot._post`` so any response that decodes to Message(s) is logged."""
     bot = application.bot
@@ -100,11 +113,8 @@ def _wrap_bot_post(application: Application, repository: SteeperRepository) -> N
         **kwargs: Any,
     ) -> Any:
         result = await orig(endpoint, data, **kwargs)
-        try:
-            for msg in _messages_from_ptb_post_result(bot, result):
-                await repository.record_outgoing(_snapshot_from_ptb_message(msg))
-        except Exception:
-            logger.debug("Failed to log outgoing message", exc_info=True)
+        # Fire-and-forget so logging never delays the bot's own API call.
+        fire_and_forget(_log_ptb_outgoing(bot, repository, result))
         return result
 
     bot._post = types.MethodType(patched, bot)  # type: ignore[assignment]

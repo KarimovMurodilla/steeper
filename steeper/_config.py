@@ -3,7 +3,7 @@ from __future__ import annotations
 import hashlib
 import hmac
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from urllib.parse import quote, urlsplit
 
 logger = logging.getLogger("steeper")
@@ -23,7 +23,9 @@ class SteeperConfig:
 
     base_url: str
     bot_id: str
-    bot_token: str
+    # repr=False so the raw token can never leak via repr()/str() of the
+    # config — e.g. in tracebacks, logs, or debugger output.
+    bot_token: str = field(repr=False)
 
     def __post_init__(self) -> None:
         parts = urlsplit(self.base_url)
@@ -67,9 +69,7 @@ class SteeperConfig:
 
     @property
     def bot_message_url(self) -> str:
-        return (
-            f"{self._base}/v1/communications/webhook/{quote(self.token_hash, safe='')}/bot-message"
-        )
+        return f"{self._base}/v1/communications/webhook/{quote(self.bot_id, safe='')}/bot-message"
 
     def secret_matches(self, candidate: str) -> bool:
         """Constant-time comparison helper for the auth secret."""
