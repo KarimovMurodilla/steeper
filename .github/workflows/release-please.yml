@@ -16,3 +16,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: googleapis/release-please-action@v4
+        with:
+          # A PAT (not the default GITHUB_TOKEN) so the tag release-please
+          # pushes triggers publish.yml. GitHub does not fire workflows for
+          # events created by GITHUB_TOKEN, which is why publishing was skipped.
+          token: ${{ secrets.RELEASE_PLEASE_TOKEN }}
