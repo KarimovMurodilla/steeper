@@ -21,8 +21,7 @@ Telegram bot middleware that syncs incoming user messages and outgoing bot repli
 - [Usage](#usage)
 - [How it works](#how-it-works)
 - [Architecture](#architecture)
-- [The Steeper platform (backend)](#the-steeper-platform-backend)
-- [The `steeper` library](#the-steeper-library)
+- [The Steeper backend](#the-steeper-backend)
 - [How they interact](#how-they-interact)
 - [Library guarantees and behavior](#library-guarantees-and-behavior)
 - [Backend compatibility](#backend-compatibility)
@@ -74,7 +73,7 @@ pip install steeper[telebot]     # pyTelegramBotAPI
 pip install steeper[ptb]         # python-telegram-bot v20+
 ```
 
-> **Need a backend?** Steeper is self-hosted. Run the Steeper backend (Docker Compose), create a superuser, and register a bot to get its `bot_id`. Point `base_url` at your instance. <!-- TODO: link to the backend repo / self-hosting guide -->
+> **Need a backend?** Steeper is self-hosted. Run the Steeper backend (Docker Compose), create a superuser, and register a bot to get its `bot_id`. Point `base_url` at your instance. See [KarimovMurodilla/steeper-sdk](https://github.com/KarimovMurodilla/steeper-sdk) for the backend and its self-hosting guide.
 
 Runnable examples for every framework live in [`examples/`](examples/).
 
@@ -205,7 +204,31 @@ await steeper.repository.record_outgoing(
 )
 ```
 
-Failures are never fatal: if the Steeper backend is unreachable or returns an error, a warning is logged and your bot keeps working. Note the dispatch model differs per framework — for **aiogram** and **python-telegram-bot** the sync calls are awaited inline, so a slow or unreachable backend can add latency (up to the client timeout, 10s by default) per update; **telebot** dispatches them as background tasks.
+The dispatch model differs per framework: for **aiogram** and **python-telegram-bot** the calls are awaited inline, so a slow or unreachable backend can add latency (up to the client timeout, 10s by default) per update; **telebot** dispatches them as background tasks. A failing backend never breaks the bot — see [Library guarantees and behavior](#library-guarantees-and-behavior).
+
+### Public API beyond the middleware
+
+For manual scenarios, the package also exports:
+
+- `steeper.SteeperConfig` — immutable config + validation, computes `token_hash`
+  and the endpoint URLs.
+- `steeper.SteeperRepository` — domain-oriented layer:
+  `forward_update(...)`, `record_outgoing(...)`.
+- `steeper.SteeperClient` — low-level async HTTP client (httpx).
+- `steeper.OutgoingMessageSnapshot` — a normalized outgoing message.
+
+### Internal layout
+
+```
+steeper/
+├── _config.py        # SteeperConfig: validates base_url, token_hash, endpoint URLs
+├── _client.py        # SteeperClient: httpx, sending, secret redaction in logs
+├── repository.py     # SteeperRepository + OutgoingMessageSnapshot
+└── integrations/
+    ├── aiogram.py     # SteeperMiddleware for aiogram v3
+    ├── telebot.py     # SteeperMiddleware for pyTelegramBotAPI
+    └── ptb.py         # SteeperMiddleware for python-telegram-bot v20+
+```
 
 ---
 
@@ -235,109 +258,23 @@ logic (chats, users, events) is done by the backend.
 
 ---
 
-## The Steeper platform (backend)
+## The Steeper backend
 
-A FastAPI application with a modular domain architecture. Full details live in the
-backend repository's README and `CLAUDE.md`; here is the overview relevant to the
-integration.
+The backend is the server side of the ecosystem and lives in its own repository:
 
-### What it does
+**➜ [KarimovMurodilla/steeper-sdk](https://github.com/KarimovMurodilla/steeper-sdk)**
 
-- Accepts incoming Telegram updates (from a direct Telegram webhook **or** from the
-  `steeper` library acting as a proxy) and stores them **verbatim**.
-- Turns messages into domain `Chat` / `Message` entities and maintains CRM
-  (Telegram users).
-- Accepts the bot's outgoing messages and stores them as part of the conversation.
-- Publishes real-time events to RabbitMQ and streams them to the panel over
-  WebSocket.
-- Provides an API for operators: chat list, history, replies, analytics, broadcasts.
+It is the FastAPI service this library talks to: it accepts incoming Telegram
+updates and outgoing bot messages, stores them verbatim, turns them into domain
+`Chat` / `Message` entities, maintains the Telegram-user CRM, publishes realtime
+events to the operator panel, and exposes the operator API (chat list, history,
+replies, analytics, broadcasts). It is self-hosted via Docker Compose.
 
-### Technology stack
-
-- Python 3.13, FastAPI, async SQLAlchemy + asyncpg, PostgreSQL (+ PostGIS).
-- Redis (cache, token JTI store), RabbitMQ + FastStream (events), Celery (tasks).
-- JWT authentication for operators, Argon2 for passwords, Fernet encryption of bot
-  tokens in the DB.
-- Everything runs via Docker Compose; all API routes are under the `/v1/` prefix.
-
-### The `communication` domain (the integration point)
-
-This is exactly where the library connects. Inside:
-
-- `routers.py` — the two HTTP endpoints (webhook and bot-message).
-- `usecases/handle_webhook.py` — handling an incoming update.
-- `usecases/log_bot_message.py` — storing an outgoing bot message.
-- `services/telegram_update_classifier.py` — classifying the update/content type.
-- `repositories/` — `chat`, `message`, `telegram_update`.
-
-### Realtime
-
-The backend publishes events to the **`steeper.events` topic exchange** with routing
-key `bot.{bot_id}.chat.{chat_id}.<event>`. The operator panel connects over
-WebSocket, authenticates with JWT, and subscribes to a `chat_id` and/or `bot_id`.
-Event types: `chat.created`, `chat.message.created`. The event envelope
-(`WSDownlinkEnvelope`): `{version, event, bot_id, chat_id, timestamp, data}`.
-
----
-
-## The `steeper` library
-
-A thin middleware that plugs into a bot and mirrors traffic to the backend. It
-supports three frameworks via extras:
-
-```bash
-pip install steeper[aiogram]   # aiogram v3
-pip install steeper[telebot]   # pyTelegramBotAPI
-pip install steeper[ptb]       # python-telegram-bot v20+
-```
-
-### Public API
-
-```python
-from steeper.integrations.aiogram import SteeperMiddleware   # or .telebot / .ptb
-
-steeper = SteeperMiddleware(
-    base_url="http://localhost:8000",   # Steeper backend address
-    bot_id="00000000-0000-0000-0000-000000000000",  # bot UUID from the platform
-    bot_token="123456:ABC-DEF...",      # token from BotFather
-    timeout=10.0,                        # optional
-)
-steeper.setup(...)   # signature depends on the framework (see Usage above)
-```
-
-Additionally available (for manual scenarios):
-
-- `steeper.SteeperConfig` — immutable config + validation, computes `token_hash`
-  and the endpoint URLs.
-- `steeper.SteeperRepository` — domain-oriented layer:
-  `forward_update(...)`, `record_outgoing(...)`.
-- `steeper.SteeperClient` — low-level async HTTP client (httpx).
-- `steeper.OutgoingMessageSnapshot` — a normalized outgoing message.
-
-### Internal layout
-
-```
-steeper/
-├── _config.py        # SteeperConfig: validates base_url, token_hash, endpoint URLs
-├── _client.py        # SteeperClient: httpx, sending, secret redaction in logs
-├── repository.py     # SteeperRepository + OutgoingMessageSnapshot
-└── integrations/
-    ├── aiogram.py     # SteeperMiddleware for aiogram v3
-    ├── telebot.py     # SteeperMiddleware for pyTelegramBotAPI
-    └── ptb.py         # SteeperMiddleware for python-telegram-bot v20+
-```
-
-### How messages are intercepted per framework
-
-| Framework | Incoming | Outgoing | Dispatch model |
-|-----------|----------|----------|----------------|
-| **aiogram v3** | outer middleware on `Update` | wrapper around `Bot.__call__` (any `Message` result is logged, including media groups) | awaited inline |
-| **python-telegram-bot** | hook on update processing | wrapper around `Bot._post` (JSON decodable to `Message`) | awaited inline |
-| **telebot** | middleware/handler | wrapper around `apihelper._make_request` for the bot token | background tasks |
-
-> Latency note: for **aiogram** and **PTB** the calls to the backend are awaited
-> inline, so an unreachable/slow backend can add latency up to `timeout` (10s by
-> default) per update. **telebot** sends them as background tasks.
+Go there for deployment instructions, the full domain model, the realtime event
+contract, and the authoritative `/v1` API reference. Everything this README says
+about the backend is only the slice needed to understand the integration; the
+endpoint contract itself is documented under
+[How they interact](#how-they-interact).
 
 ---
 
@@ -353,11 +290,7 @@ the **raw `bot_token` is never sent over the network**.
 | Endpoint | Purpose |
 |----------|---------|
 | `POST /v1/communications/webhook/{bot_id}` | Forward incoming Telegram updates (auth via `x-telegram-bot-api-secret-token` = SHA-256 of the bot token) |
-| `POST /v1/communications/webhook/{token_hash}/bot-message` | Record outgoing bot messages |
-
-| `steeper` (library) | Steeper backend API |
-|---------------------|---------------------|
-| `0.1.x`             | `v1`                |
+| `POST /v1/communications/webhook/{bot_id}/bot-message` | Record outgoing bot messages |
 
 **A. Incoming update**
 
@@ -475,7 +408,7 @@ contract above must match on the client and the server.
 | `0.2.x`             | bot-message authenticated via header (current) |
 | `0.1.x`             | bot-message authenticated via `token_hash` in the URL path (legacy) |
 
-As long as the backend keeps the `v1` contract above, any `0.1.x` client works. Breaking changes to the contract will bump the API version (`/v2`) and the library minor version together.
+As long as the backend keeps the `v1` contract above, any `0.x` client works. Breaking changes to the contract will bump the API version (`/v2`) and the library minor version together.
 
 ## License
 
