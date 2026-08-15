@@ -5,6 +5,14 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.5](https://github.com/KarimovMurodilla/steeper/compare/v0.1.4...v0.1.5) (2026-08-15)
+
+
+### Documentation
+
+* correct info, remove duplicates and more ([5b0fa96](https://github.com/KarimovMurodilla/steeper/commit/5b0fa96ebcda5e10f32f09e3b17fe0bc2db2163e))
+* correct info, remove duplicates and more ([a2f7b1b](https://github.com/KarimovMurodilla/steeper/commit/a2f7b1b5257f6f2a6e313f87572b4c975ad24c5f))
+
 ## [0.1.4](https://github.com/KarimovMurodilla/steeper/compare/v0.1.3...v0.1.4) (2026-07-19)
 
 
