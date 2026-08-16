@@ -1,19 +1,22 @@
 """Tests for the python-telegram-bot integration.
 
-The integration wraps ``Bot._post`` per instance and chains onto the
-application's ``post_shutdown``; both are asserted here.
+The integration patches ``Bot._post`` at class level, keeps its state in module
+globals, and chains onto the application's ``post_shutdown``; all three are
+asserted here, and every test restores the patch state.
 """
 
 import asyncio
+from collections.abc import Iterator
 from datetime import datetime, timezone
 from typing import Any
 
 import httpx
 import pytest
 import respx
-from telegram import Chat, Message, Update
+from telegram import Bot, Chat, Message, Update
 from telegram.ext import ApplicationBuilder
 
+from steeper.integrations import ptb as integration
 from steeper.integrations.ptb import (
     SteeperMiddleware,
     _chain_post_shutdown,
@@ -34,6 +37,17 @@ _MESSAGE_JSON = {
     "date": 1700000000,
     "text": "hello",
 }
+
+
+@pytest.fixture(autouse=True)
+def _restore_patch_state() -> Iterator[None]:
+    orig_post = Bot._post
+    saved = integration._orig_bot_post
+    yield
+    Bot._post = orig_post  # type: ignore[method-assign]
+    integration._orig_bot_post = saved
+    integration._bot_repos.clear()
+    integration._setup_applications.clear()
 
 
 def _middleware() -> SteeperMiddleware:
@@ -156,12 +170,12 @@ async def test_setup_is_idempotent() -> None:
     middleware = _middleware()
 
     middleware.setup(app)
-    wrapped_post = app.bot._post
+    wrapped_post = Bot._post
     handlers = sum(len(group) for group in app.handlers.values())
 
     middleware.setup(app)
 
-    assert app.bot._post is wrapped_post, "a second setup() must not nest another wrapper"
+    assert Bot._post is wrapped_post, "a second setup() must not nest another wrapper"
     assert sum(len(group) for group in app.handlers.values()) == handlers
     await middleware.aclose()
 
@@ -174,10 +188,12 @@ async def test_outgoing_messages_are_logged() -> None:
         return_value=httpx.Response(200)
     )
 
-    async def fake_post(endpoint: str, data: Any = None, **kwargs: Any) -> Any:
+    async def fake_post(self: Any, endpoint: str, data: Any = None, **kwargs: Any) -> Any:
         return _MESSAGE_JSON
 
-    app.bot._post = fake_post  # type: ignore[assignment]
+    # Patch the class before setup() so the integration wraps this stub as its
+    # original; PTB freezes instances, so `bot._post = ...` is not assignable.
+    Bot._post = fake_post  # type: ignore[method-assign]
     middleware.setup(app)
 
     assert await app.bot._post("sendMessage", {}) == _MESSAGE_JSON

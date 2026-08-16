@@ -17,22 +17,19 @@ Usage::
 
 from __future__ import annotations
 
+import hashlib
 import logging
-import types
 from collections.abc import Awaitable, Callable
 from typing import Any
+from weakref import WeakSet
 
 from steeper._background import fire_and_forget
 from steeper.repository import OutgoingMessageSnapshot, SteeperRepository, text_from_message_body
 
 logger = logging.getLogger("steeper.ptb")
 
-# Marks a bot whose ``_post`` is already wrapped, so a repeated ``setup()`` can't
-# nest a second wrapper and log every outgoing message twice.
-_SETUP_MARKER = "_steeper_setup"
-
 try:
-    from telegram import Message, Update
+    from telegram import Bot, Message, Update
     from telegram.ext import (
         Application,
         BaseHandler,
@@ -106,14 +103,38 @@ async def _log_ptb_outgoing(bot: Any, repository: SteeperRepository, result: Any
         await repository.record_outgoing(_snapshot_from_ptb_message(msg))
 
 
-def _wrap_bot_post(application: Application, repository: SteeperRepository) -> None:  # type: ignore[type-arg]
-    """Wrap ``Bot._post`` so any response that decodes to Message(s) is logged."""
-    bot = application.bot
-    if getattr(bot, _SETUP_MARKER, False):
-        return
-    setattr(bot, _SETUP_MARKER, True)
+# Maps each registered bot to its repository, keyed by the SHA-256 of the bot
+# token rather than by the Bot object: PTB's objects define ``__slots__`` and are
+# not weak-referenceable, and the digest keeps the raw token out of this global.
+_bot_repos: dict[str, SteeperRepository] = {}
+_orig_bot_post: Any = None
 
-    orig = bot._post
+# Applications already set up, so a repeated ``setup()`` can't stack a second
+# handler (and a second shutdown callback) on one of them. A WeakSet rather than
+# an attribute on the Application: under Python 3.13 its ``__slots__`` are
+# enforced, so it has no ``__dict__`` to hold a marker.
+_setup_applications: WeakSet[Application] = WeakSet()  # type: ignore[type-arg]
+
+
+def _bot_key(bot: Any) -> str:
+    return hashlib.sha256(bot.token.encode()).hexdigest()
+
+
+def _wrap_bot_post(application: Application, repository: SteeperRepository) -> None:  # type: ignore[type-arg]
+    """Intercept ``Bot._post`` so any response that decodes to Message(s) is logged.
+
+    The wrapper is installed on :class:`telegram.Bot` itself rather than on the
+    instance: PTB freezes its objects and defines ``__slots__``, so ``bot._post =
+    ...`` raises ``AttributeError`` ("attribute '_post' is read-only"). A registry
+    keyed by token digest keeps the patch scoped to bots actually set up with
+    Steeper, and ``ExtBot`` inherits ``_post`` unchanged, so it is covered too.
+    """
+    global _orig_bot_post
+    _bot_repos[_bot_key(application.bot)] = repository
+
+    if _orig_bot_post is not None:
+        return
+    _orig_bot_post = Bot._post
 
     async def patched(
         self: Any,
@@ -121,12 +142,14 @@ def _wrap_bot_post(application: Application, repository: SteeperRepository) -> N
         data: Any = None,
         **kwargs: Any,
     ) -> Any:
-        result = await orig(endpoint, data, **kwargs)
-        # Fire-and-forget so logging never delays the bot's own API call.
-        fire_and_forget(_log_ptb_outgoing(bot, repository, result))
+        result = await _orig_bot_post(self, endpoint, data, **kwargs)
+        repo = _bot_repos.get(_bot_key(self))
+        if repo is not None:
+            # Fire-and-forget so logging never delays the bot's own API call.
+            fire_and_forget(_log_ptb_outgoing(self, repo, result))
         return result
 
-    bot._post = types.MethodType(patched, bot)  # type: ignore[assignment]
+    Bot._post = patched  # type: ignore[method-assign]
 
 
 def _chain_post_shutdown(
@@ -180,10 +203,10 @@ class SteeperMiddleware:
           (``sendMessage``, ``sendPhoto``, ``sendMediaGroup``, ``editMessageText``, etc.) is
           logged to Steeper.
         """
-        if getattr(application, _SETUP_MARKER, False):
+        if application in _setup_applications:
             logger.debug("Steeper is already set up on this application; ignoring")
             return
-        setattr(application, _SETUP_MARKER, True)
+        _setup_applications.add(application)
 
         application.add_handler(_SteeperHandler(self._repository), group=-1)
         _wrap_bot_post(application, self._repository)
