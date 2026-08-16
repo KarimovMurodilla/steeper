@@ -21,7 +21,7 @@ import json
 import logging
 from typing import Any
 
-from steeper._background import fire_and_forget_threadsafe
+from steeper._background import fire_and_forget_threadsafe, run_threadsafe
 from steeper.repository import OutgoingMessageSnapshot, SteeperRepository, text_from_message_body
 
 logger = logging.getLogger("steeper.telebot")
@@ -38,6 +38,10 @@ except ImportError as _exc:
 
 _apihelper_orig: Any = None
 _token_repos: dict[str, SteeperRepository] = {}
+
+# Marks a bot whose ``process_new_updates`` is already wrapped, so a repeated
+# ``setup()`` can't nest a second wrapper and forward every update twice.
+_SETUP_MARKER = "_steeper_setup"
 
 
 def _telebot_snapshots_from_result(result: Any) -> list[OutgoingMessageSnapshot]:
@@ -137,6 +141,10 @@ def _wrap_process_new_updates(bot: _telebot.TeleBot, repository: SteeperReposito
     This covers both polling and webhook dispatch and yields the real ``update_id``,
     unlike a message-only middleware.
     """
+    if getattr(bot, _SETUP_MARKER, False):
+        return
+    setattr(bot, _SETUP_MARKER, True)
+
     orig = bot.process_new_updates
 
     def patched(updates: Any) -> Any:
@@ -186,6 +194,15 @@ class SteeperMiddleware:
         _wrap_process_new_updates(bot, self._repository)
 
         logger.info("Steeper middleware registered for pyTelegramBotAPI")
+
+    def close(self, *, timeout: float = 5.0) -> None:
+        """Close the underlying HTTP client, blocking until it is done.
+
+        pyTelegramBotAPI is synchronous and offers no shutdown hook, so this has to be
+        called by hand — typically in a ``finally`` around ``bot.polling()``. Best-effort:
+        it never raises.
+        """
+        run_threadsafe(self._repository.aclose(), timeout=timeout)
 
     @property
     def repository(self) -> SteeperRepository:

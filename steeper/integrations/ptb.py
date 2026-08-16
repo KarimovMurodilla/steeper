@@ -17,9 +17,11 @@ Usage::
 
 from __future__ import annotations
 
+import hashlib
 import logging
-import types
+from collections.abc import Awaitable, Callable
 from typing import Any
+from weakref import WeakSet
 
 from steeper._background import fire_and_forget
 from steeper.repository import OutgoingMessageSnapshot, SteeperRepository, text_from_message_body
@@ -27,7 +29,7 @@ from steeper.repository import OutgoingMessageSnapshot, SteeperRepository, text_
 logger = logging.getLogger("steeper.ptb")
 
 try:
-    from telegram import Message, Update
+    from telegram import Bot, Message, Update
     from telegram.ext import (
         Application,
         BaseHandler,
@@ -101,10 +103,38 @@ async def _log_ptb_outgoing(bot: Any, repository: SteeperRepository, result: Any
         await repository.record_outgoing(_snapshot_from_ptb_message(msg))
 
 
+# Maps each registered bot to its repository, keyed by the SHA-256 of the bot
+# token rather than by the Bot object: PTB's objects define ``__slots__`` and are
+# not weak-referenceable, and the digest keeps the raw token out of this global.
+_bot_repos: dict[str, SteeperRepository] = {}
+_orig_bot_post: Any = None
+
+# Applications already set up, so a repeated ``setup()`` can't stack a second
+# handler (and a second shutdown callback) on one of them. A WeakSet rather than
+# an attribute on the Application: under Python 3.13 its ``__slots__`` are
+# enforced, so it has no ``__dict__`` to hold a marker.
+_setup_applications: WeakSet[Application] = WeakSet()  # type: ignore[type-arg]
+
+
+def _bot_key(bot: Any) -> str:
+    return hashlib.sha256(bot.token.encode()).hexdigest()
+
+
 def _wrap_bot_post(application: Application, repository: SteeperRepository) -> None:  # type: ignore[type-arg]
-    """Wrap ``Bot._post`` so any response that decodes to Message(s) is logged."""
-    bot = application.bot
-    orig = bot._post
+    """Intercept ``Bot._post`` so any response that decodes to Message(s) is logged.
+
+    The wrapper is installed on :class:`telegram.Bot` itself rather than on the
+    instance: PTB freezes its objects and defines ``__slots__``, so ``bot._post =
+    ...`` raises ``AttributeError`` ("attribute '_post' is read-only"). A registry
+    keyed by token digest keeps the patch scoped to bots actually set up with
+    Steeper, and ``ExtBot`` inherits ``_post`` unchanged, so it is covered too.
+    """
+    global _orig_bot_post
+    _bot_repos[_bot_key(application.bot)] = repository
+
+    if _orig_bot_post is not None:
+        return
+    _orig_bot_post = Bot._post
 
     async def patched(
         self: Any,
@@ -112,12 +142,36 @@ def _wrap_bot_post(application: Application, repository: SteeperRepository) -> N
         data: Any = None,
         **kwargs: Any,
     ) -> Any:
-        result = await orig(endpoint, data, **kwargs)
-        # Fire-and-forget so logging never delays the bot's own API call.
-        fire_and_forget(_log_ptb_outgoing(bot, repository, result))
+        result = await _orig_bot_post(self, endpoint, data, **kwargs)
+        repo = _bot_repos.get(_bot_key(self))
+        if repo is not None:
+            # Fire-and-forget so logging never delays the bot's own API call.
+            fire_and_forget(_log_ptb_outgoing(self, repo, result))
         return result
 
-    bot._post = types.MethodType(patched, bot)  # type: ignore[assignment]
+    Bot._post = patched  # type: ignore[method-assign]
+
+
+def _chain_post_shutdown(
+    application: Application,  # type: ignore[type-arg]
+    close: Callable[[], Awaitable[None]],
+) -> None:
+    """Append ``close`` to the application's ``post_shutdown`` callback.
+
+    ``post_shutdown`` holds at most one callback, and the host application may already
+    have set its own, so chain rather than overwrite. PTB awaits it from
+    ``run_polling``/``run_webhook`` only.
+    """
+    orig = getattr(application, "post_shutdown", None)
+
+    async def patched(app: Application) -> None:  # type: ignore[type-arg]
+        try:
+            if orig is not None:
+                await orig(app)
+        finally:
+            await close()
+
+    application.post_shutdown = patched
 
 
 class SteeperMiddleware:
@@ -149,9 +203,25 @@ class SteeperMiddleware:
           (``sendMessage``, ``sendPhoto``, ``sendMediaGroup``, ``editMessageText``, etc.) is
           logged to Steeper.
         """
+        if application in _setup_applications:
+            logger.debug("Steeper is already set up on this application; ignoring")
+            return
+        _setup_applications.add(application)
+
         application.add_handler(_SteeperHandler(self._repository), group=-1)
         _wrap_bot_post(application, self._repository)
+        _chain_post_shutdown(application, self.aclose)
         logger.info("Steeper middleware registered for python-telegram-bot")
+
+    async def aclose(self) -> None:
+        """Close the underlying HTTP client.
+
+        Chained onto ``Application.post_shutdown`` by :meth:`setup`, so bots driven by
+        ``run_polling``/``run_webhook`` need not call it. A bare ``Application.shutdown()``
+        does *not* run ``post_shutdown``, so call this yourself if you manage the
+        application lifecycle by hand.
+        """
+        await self._repository.aclose()
 
     @property
     def repository(self) -> SteeperRepository:

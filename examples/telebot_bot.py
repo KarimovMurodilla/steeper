@@ -20,11 +20,12 @@ STEEPER_BASE_URL = os.environ.get("STEEPER_BASE_URL", "http://localhost:8000")
 
 bot = telebot.TeleBot(BOT_TOKEN)
 
-SteeperMiddleware(
+steeper = SteeperMiddleware(
     base_url=STEEPER_BASE_URL,
     bot_id=STEEPER_BOT_ID,
     bot_token=BOT_TOKEN,
-).setup(bot)
+)
+steeper.setup(bot)
 
 
 @bot.message_handler(commands=["start"])
@@ -33,4 +34,9 @@ def cmd_start(message: telebot.types.Message) -> None:
 
 
 if __name__ == "__main__":
-    bot.polling()
+    try:
+        bot.polling()
+    finally:
+        # telebot is synchronous and has no shutdown hook, so close the Steeper
+        # HTTP client by hand. aiogram and python-telegram-bot do this for you.
+        steeper.close()
