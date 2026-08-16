@@ -5,6 +5,23 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0](https://github.com/KarimovMurodilla/steeper/compare/v0.1.5...v0.2.0) (2026-08-16)
+
+
+### Features
+
+* bound the forward queue, make setup idempotent, close the client ([bdad7fc](https://github.com/KarimovMurodilla/steeper/commit/bdad7fc5742afb28a5bc4200c63d946fc2aedb6a))
+
+
+### Bug Fixes
+
+* **ptb:** stop storing setup state on frozen PTB objects ([531cdfa](https://github.com/KarimovMurodilla/steeper/commit/531cdfa464ce4946904ed901690a0402e202bbbd))
+
+
+### Documentation
+
+* correct the backend compatibility version ranges ([cb3304d](https://github.com/KarimovMurodilla/steeper/commit/cb3304ded8684908854ba1fc46b4ab73a031221a))
+
 ## [0.1.5](https://github.com/KarimovMurodilla/steeper/compare/v0.1.4...v0.1.5) (2026-08-15)
 
 
