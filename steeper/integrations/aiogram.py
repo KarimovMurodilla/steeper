@@ -88,6 +88,10 @@ async def _log_aiogram_outgoing(repository: SteeperRepository, result: Any) -> N
 _bot_repos: WeakKeyDictionary[Bot, SteeperRepository] = WeakKeyDictionary()
 _orig_bot_call: Any = None
 
+# Marks a dispatcher that has already been set up, so a repeated ``setup()`` can't
+# stack a second outer middleware (and a second shutdown callback) on it.
+_SETUP_MARKER = "_steeper_setup"
+
 
 def _wrap_bot_api_call(bot: Bot, repository: SteeperRepository) -> None:
     """Intercept all Bot API calls; log any return value that is a Message (or list of them).
@@ -139,6 +143,7 @@ class SteeperMiddleware:
             bot_token=bot_token,
             timeout=timeout,
         )
+        self._incoming = _IncomingMiddleware(self._repository)
 
     def setup(self, dp: Dispatcher, bot: Bot) -> None:
         """Register Steeper on the dispatcher and bot.
@@ -147,14 +152,29 @@ class SteeperMiddleware:
         - Outgoing traffic is observed by wrapping :meth:`Bot.__call__`, so any API call that
           returns a :class:`~aiogram.types.Message` (``send_message``, ``send_photo``, media
           groups, etc.) is logged to Steeper.
+        - The HTTP client is closed on dispatcher shutdown.
+
+        Calling this more than once for the same dispatcher is a no-op: re-registering
+        would forward every update twice.
         """
+        if getattr(dp, _SETUP_MARKER, False):
+            logger.debug("Steeper is already set up on this dispatcher; ignoring")
+            return
+        setattr(dp, _SETUP_MARKER, True)
+
         dp.update.outer_middleware(self._incoming)
+        dp.shutdown.register(self.aclose)
         _wrap_bot_api_call(bot, self._repository)
         logger.info("Steeper middleware registered for aiogram")
 
-    @property
-    def _incoming(self) -> _IncomingMiddleware:
-        return _IncomingMiddleware(self._repository)
+    async def aclose(self) -> None:
+        """Close the underlying HTTP client.
+
+        Registered as a dispatcher shutdown callback by :meth:`setup`, so bots driven by
+        ``start_polling`` need not call it; call it yourself if you drive the dispatcher
+        manually.
+        """
+        await self._repository.aclose()
 
     @property
     def repository(self) -> SteeperRepository:

@@ -19,12 +19,17 @@ from __future__ import annotations
 
 import logging
 import types
+from collections.abc import Awaitable, Callable
 from typing import Any
 
 from steeper._background import fire_and_forget
 from steeper.repository import OutgoingMessageSnapshot, SteeperRepository, text_from_message_body
 
 logger = logging.getLogger("steeper.ptb")
+
+# Marks a bot whose ``_post`` is already wrapped, so a repeated ``setup()`` can't
+# nest a second wrapper and log every outgoing message twice.
+_SETUP_MARKER = "_steeper_setup"
 
 try:
     from telegram import Message, Update
@@ -104,6 +109,10 @@ async def _log_ptb_outgoing(bot: Any, repository: SteeperRepository, result: Any
 def _wrap_bot_post(application: Application, repository: SteeperRepository) -> None:  # type: ignore[type-arg]
     """Wrap ``Bot._post`` so any response that decodes to Message(s) is logged."""
     bot = application.bot
+    if getattr(bot, _SETUP_MARKER, False):
+        return
+    setattr(bot, _SETUP_MARKER, True)
+
     orig = bot._post
 
     async def patched(
@@ -118,6 +127,28 @@ def _wrap_bot_post(application: Application, repository: SteeperRepository) -> N
         return result
 
     bot._post = types.MethodType(patched, bot)  # type: ignore[assignment]
+
+
+def _chain_post_shutdown(
+    application: Application,  # type: ignore[type-arg]
+    close: Callable[[], Awaitable[None]],
+) -> None:
+    """Append ``close`` to the application's ``post_shutdown`` callback.
+
+    ``post_shutdown`` holds at most one callback, and the host application may already
+    have set its own, so chain rather than overwrite. PTB awaits it from
+    ``run_polling``/``run_webhook`` only.
+    """
+    orig = getattr(application, "post_shutdown", None)
+
+    async def patched(app: Application) -> None:  # type: ignore[type-arg]
+        try:
+            if orig is not None:
+                await orig(app)
+        finally:
+            await close()
+
+    application.post_shutdown = patched
 
 
 class SteeperMiddleware:
@@ -149,9 +180,25 @@ class SteeperMiddleware:
           (``sendMessage``, ``sendPhoto``, ``sendMediaGroup``, ``editMessageText``, etc.) is
           logged to Steeper.
         """
+        if getattr(application, _SETUP_MARKER, False):
+            logger.debug("Steeper is already set up on this application; ignoring")
+            return
+        setattr(application, _SETUP_MARKER, True)
+
         application.add_handler(_SteeperHandler(self._repository), group=-1)
         _wrap_bot_post(application, self._repository)
+        _chain_post_shutdown(application, self.aclose)
         logger.info("Steeper middleware registered for python-telegram-bot")
+
+    async def aclose(self) -> None:
+        """Close the underlying HTTP client.
+
+        Chained onto ``Application.post_shutdown`` by :meth:`setup`, so bots driven by
+        ``run_polling``/``run_webhook`` need not call it. A bare ``Application.shutdown()``
+        does *not* run ``post_shutdown``, so call this yourself if you manage the
+        application lifecycle by hand.
+        """
+        await self._repository.aclose()
 
     @property
     def repository(self) -> SteeperRepository:

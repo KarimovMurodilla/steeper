@@ -204,7 +204,30 @@ await steeper.repository.record_outgoing(
 )
 ```
 
-The dispatch model differs per framework: for **aiogram** and **python-telegram-bot** the calls are awaited inline, so a slow or unreachable backend can add latency (up to the client timeout, 10s by default) per update; **telebot** dispatches them as background tasks. A failing backend never breaks the bot — see [Library guarantees and behavior](#library-guarantees-and-behavior).
+All forwarding is **fire-and-forget** — no framework awaits the Steeper round-trip inline, so a slow or unreachable backend never adds latency to your handlers or to the bot's own API calls. Only the transport differs: for **aiogram** and **python-telegram-bot** the coroutine is scheduled on the running event loop; for **telebot**, whose handlers run on plain worker threads, it is scheduled on a shared background loop in a daemon thread. A failing backend never breaks the bot — see [Library guarantees and behavior](#library-guarantees-and-behavior).
+
+### Shutting down
+
+The middleware owns an `httpx.AsyncClient`, which should be closed when the bot
+stops. Where the framework offers a shutdown hook, `setup()` wires it up for you:
+
+| Framework | What you need to do |
+|-----------|---------------------|
+| **aiogram** | Nothing — registered on `Dispatcher.shutdown`, which `start_polling` triggers. |
+| **python-telegram-bot** | Nothing under `run_polling` / `run_webhook` — chained onto `Application.post_shutdown`. |
+| **telebot** | Call `steeper.close()` yourself — the framework is synchronous and has no hook. |
+
+```python
+# telebot
+try:
+    bot.polling()
+finally:
+    steeper.close()
+```
+
+If you drive the lifecycle by hand — an aiogram dispatcher you feed yourself, or a
+PTB `Application.shutdown()` without `run_polling` (which does *not* run
+`post_shutdown`) — call `await steeper.aclose()` at the end.
 
 ### Public API beyond the middleware
 
@@ -390,6 +413,18 @@ Important notes about the outgoing flow:
 - **Never breaks the bot.** If the backend is unreachable or returns an error, the
   library logs a `warning` and keeps going — your handlers and replies to the user
   are unaffected.
+- **Never slows the bot down.** Every call to Steeper is fire-and-forget: the
+  library schedules the request and returns immediately, so the client `timeout`
+  (10s by default) bounds the background request, never your handler.
+- **At-most-once delivery.** A failed forward is logged and dropped — there is no
+  retry or persistent queue. Steeper is an observability sidecar, not a durable
+  log: if the backend is down, that traffic is not recorded.
+- **Bounded memory.** At most 512 forwards may be in flight at once. Past that the
+  newest ones are dropped rather than queued, so a backend outage can't grow the
+  bot's memory without limit. The first drop logs a `warning`; the rest log at
+  `debug` with a running total, and the warning re-arms once the queue drains.
+- **Idempotent setup.** Calling `setup()` twice on the same dispatcher/bot is a
+  no-op, so an accidental double registration won't mirror every message twice.
 - **Safe logs.** The `token_hash` is stripped from error text before logging (so the
   secret can't leak via a URL in an httpx message).
 - **Plaintext warning.** If `base_url` is `http://` against a non-local host, the
