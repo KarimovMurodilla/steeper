@@ -440,8 +440,8 @@ contract above must match on the client and the server.
 
 | `steeper` (library) | Steeper backend |
 |---------------------|-----------------|
-| `0.2.x`             | bot-message authenticated via header (current) |
-| `0.1.x`             | bot-message authenticated via `token_hash` in the URL path (legacy) |
+| `0.1.4` and newer   | bot-message authenticated via the `x-telegram-bot-api-secret-token` header (current) |
+| `0.1.3` and older   | bot-message authenticated via `token_hash` in the URL path (legacy) |
 
 As long as the backend keeps the `v1` contract above, any `0.x` client works. Breaking changes to the contract will bump the API version (`/v2`) and the library minor version together.
 
