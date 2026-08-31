@@ -18,6 +18,14 @@ def __getattr__(name: str) -> Any:
         from steeper.repository import SteeperRepository
 
         return SteeperRepository
+    if name == "SteeperLogHandler":
+        from steeper._logging import SteeperLogHandler
+
+        return SteeperLogHandler
+    if name == "install_log_handler":
+        from steeper._logging import install_log_handler
+
+        return install_log_handler
     if name == "OutgoingMessageSnapshot":
         from steeper.repository import OutgoingMessageSnapshot
 
@@ -25,4 +33,11 @@ def __getattr__(name: str) -> Any:
     raise AttributeError(f"module 'steeper' has no attribute {name!r}")
 
 
-__all__ = ["SteeperConfig", "SteeperClient", "SteeperRepository", "OutgoingMessageSnapshot"]
+__all__ = [
+    "SteeperConfig",
+    "SteeperClient",
+    "SteeperRepository",
+    "OutgoingMessageSnapshot",
+    "SteeperLogHandler",
+    "install_log_handler",
+]

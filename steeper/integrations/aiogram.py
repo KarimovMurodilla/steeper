@@ -23,6 +23,7 @@ from typing import Any
 from weakref import WeakKeyDictionary
 
 from steeper._background import fire_and_forget
+from steeper._logging import LogCapture, LogCaptureOptions
 from steeper.repository import OutgoingMessageSnapshot, SteeperRepository, text_from_message_body
 
 logger = logging.getLogger("steeper.aiogram")
@@ -136,7 +137,25 @@ class SteeperMiddleware:
         bot_token: str,
         *,
         timeout: float = 10.0,
+        capture_logs: bool = False,
+        log_level: int | str = "INFO",
+        log_batch_size: int = 100,
+        log_flush_interval: float = 2.0,
+        log_exclude_loggers: frozenset[str] | set[str] | None = None,
     ) -> None:
+        """Create the integration.
+
+        Args beyond the connection settings:
+            capture_logs: Also ship the bot process's ``logging`` output to
+                Steeper, so the platform can show its system logs.
+            log_level: Minimum level captured. ``DEBUG`` on a chatty bot is a lot
+                of traffic, hence the ``INFO`` default.
+            log_batch_size: Records buffered before a batch is shipped.
+            log_flush_interval: Seconds between flushes of a partial batch.
+            log_exclude_loggers: Extra logger-name prefixes never shipped, on top
+                of Steeper's own and its HTTP stack (which must stay excluded to
+                avoid a logging loop).
+        """
         self._repository = SteeperRepository(
             base_url=base_url,
             bot_id=bot_id,
@@ -144,6 +163,16 @@ class SteeperMiddleware:
             timeout=timeout,
         )
         self._incoming = _IncomingMiddleware(self._repository)
+        self._log_capture = LogCapture(
+            LogCaptureOptions(
+                enabled=capture_logs,
+                level=log_level,
+                batch_size=log_batch_size,
+                flush_interval=log_flush_interval,
+                exclude_loggers=frozenset(log_exclude_loggers) if log_exclude_loggers else None,
+            )
+        )
+        self._timeout = timeout
 
     def setup(self, dp: Dispatcher, bot: Bot) -> None:
         """Register Steeper on the dispatcher and bot.
@@ -165,6 +194,7 @@ class SteeperMiddleware:
         dp.update.outer_middleware(self._incoming)
         dp.shutdown.register(self.aclose)
         _wrap_bot_api_call(bot, self._repository)
+        self._log_capture.start(self._repository.config, timeout=self._timeout)
         logger.info("Steeper middleware registered for aiogram")
 
     async def aclose(self) -> None:
@@ -174,6 +204,7 @@ class SteeperMiddleware:
         ``start_polling`` need not call it; call it yourself if you drive the dispatcher
         manually.
         """
+        await self._log_capture.astop()
         await self._repository.aclose()
 
     @property
