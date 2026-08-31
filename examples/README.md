@@ -20,3 +20,16 @@ environment variables so you can copy a file and run it as-is.
    ```
 
 Send `/start` to your bot; the message (and the bot's reply) should appear in Steeper.
+
+## System logs
+
+Every example runs with `capture_logs=True`, so the bot's own `logging` output is
+shipped to the platform and shown on the **Logs** page of the operator panel.
+
+- `/start` emits an `INFO` record carrying `extra={"chat_id": ...}`.
+- `/boom` fails on purpose and logs the traceback at `ERROR`, so you can see how
+  an exception is rendered.
+
+Records are batched (by default up to 100 of them, or every 2 seconds), so a
+line can take a moment to appear. Capture is off by default in the library —
+drop `capture_logs=True` if you only want conversations mirrored.

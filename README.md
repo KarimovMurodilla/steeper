@@ -23,6 +23,7 @@ Telegram bot middleware that syncs incoming user messages and outgoing bot repli
 - [Architecture](#architecture)
 - [The Steeper backend](#the-steeper-backend)
 - [How they interact](#how-they-interact)
+- [System logs](#system-logs)
 - [Library guarantees and behavior](#library-guarantees-and-behavior)
 - [Backend compatibility](#backend-compatibility)
 - [License](#license)
@@ -88,6 +89,38 @@ Every integration requires three values:
 | `bot_token` | Raw Telegram bot token from BotFather        |
 
 An optional `timeout` (seconds, default `10.0`) is also accepted.
+
+### Optional: system logs
+
+Set `capture_logs=True` and the middleware also ships the bot process's
+`logging` output to Steeper, where the operator panel shows it as a live stream
+with searchable history:
+
+```python
+steeper = SteeperMiddleware(
+    base_url="http://localhost:8000",
+    bot_id="your-bot-uuid",
+    bot_token=BOT_TOKEN,
+    capture_logs=True,
+    log_level="INFO",
+)
+```
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `capture_logs` | `False` | Attach a `logging` handler to the root logger and ship records to Steeper |
+| `log_level` | `"INFO"` | Minimum level captured. `DEBUG` on a chatty bot is a lot of traffic |
+| `log_batch_size` | `100` | Records buffered before a batch is shipped (capped at 500, the backend's limit) |
+| `log_flush_interval` | `2.0` | Seconds between flushes of a partial batch |
+| `log_exclude_loggers` | `None` | Extra logger-name prefixes never shipped |
+
+`steeper`'s own logger and its HTTP stack (`httpx`, `httpcore`, `h11`, …) are
+always excluded — shipping them would log from inside the shipping path, which
+is a loop that ends in a crash, not a dropped record. Anything you pass to
+`log_exclude_loggers` is *added* to that set, never replaces it.
+
+Capture is off by default: it is extra outbound traffic and extra storage on the
+backend, so it should be an explicit choice.
 
 ### Prerequisite: register the bot
 
@@ -180,7 +213,7 @@ app.run_polling()
 
 ## How it works
 
-All HTTP calls to Steeper go through **`SteeperRepository`** (`steeper.repository`): it forwards **incoming** updates and records **outgoing** bot messages to your backend. Each `SteeperMiddleware` exposes `.repository` (and `.client` for the underlying async HTTP client).
+All HTTP calls to Steeper go through **`SteeperRepository`** (`steeper.repository`): it forwards **incoming** updates and records **outgoing** bot messages to your backend. Log capture is separate — see [System logs](#system-logs). Each `SteeperMiddleware` exposes `.repository` (and `.client` for the underlying async HTTP client).
 
 1. **Incoming** — the integration passes the **full** Telegram update, as Telegram-shaped JSON, to `repository.forward_update(...)` (every update type — messages, callback queries, inline queries, etc. — with all fields preserved). Your handlers still run as usual.
 
@@ -205,6 +238,42 @@ await steeper.repository.record_outgoing(
 ```
 
 All forwarding is **fire-and-forget** — no framework awaits the Steeper round-trip inline, so a slow or unreachable backend never adds latency to your handlers or to the bot's own API calls. Only the transport differs: for **aiogram** and **python-telegram-bot** the coroutine is scheduled on the running event loop; for **telebot**, whose handlers run on plain worker threads, it is scheduled on a shared background loop in a daemon thread. A failing backend never breaks the bot — see [Library guarantees and behavior](#library-guarantees-and-behavior).
+
+### System logs
+
+With `capture_logs=True`, `setup()` attaches a `SteeperLogHandler` to the root
+logger. It behaves differently from update forwarding, because log volume is
+orders of magnitude higher:
+
+- **Batched, not per-record.** `emit()` only appends to an in-memory deque. A
+  background thread flushes every `log_flush_interval` seconds, or as soon as
+  `log_batch_size` records are waiting, and posts the batch in one request.
+- **Bounded, dropping the oldest.** At most 10 000 records are held while the
+  backend is unreachable. Past that the *oldest* are discarded — the opposite of
+  the update forwarder, which drops the newest, because for logs the recent
+  records are the ones being read.
+- **Never re-entrant.** Records from `steeper` and its HTTP stack are dropped,
+  and a thread-local guard breaks any remaining cycle, so a log emitted from
+  inside the shipping path can't spiral.
+- **Never fatal.** A record that cannot be formatted or serialized is skipped;
+  `logger.info(...)` in your handlers never raises because of Steeper.
+- **Shipped on its own loop and client.** Log batches go out on the shared
+  background loop with a dedicated `httpx.AsyncClient`, so they never share a
+  connection pool across event loops with update forwarding.
+
+`close()` / `aclose()` detaches the handler and flushes what is still buffered
+— the one place the caller does wait for the network. For async frameworks the
+flush runs in a worker thread so it never blocks the bot's event loop.
+
+To attach the handler somewhere other than the root logger, use it directly:
+
+```python
+import logging
+from steeper import SteeperLogHandler
+
+handler = SteeperLogHandler(steeper.repository.config, level=logging.WARNING)
+logging.getLogger("app.payments").addHandler(handler)
+```
 
 ### Shutting down
 
@@ -239,6 +308,8 @@ For manual scenarios, the package also exports:
   `forward_update(...)`, `record_outgoing(...)`.
 - `steeper.SteeperClient` — low-level async HTTP client (httpx).
 - `steeper.OutgoingMessageSnapshot` — a normalized outgoing message.
+- `steeper.SteeperLogHandler` — a `logging.Handler` that ships records to
+  Steeper; `steeper.install_log_handler(...)` attaches one to a logger.
 
 ### Internal layout
 
@@ -246,6 +317,8 @@ For manual scenarios, the package also exports:
 steeper/
 ├── _config.py        # SteeperConfig: validates base_url, token_hash, endpoint URLs
 ├── _client.py        # SteeperClient: httpx, sending, secret redaction in logs
+├── _logging.py       # SteeperLogHandler: capture, batching, bounded buffer
+├── _log_client.py    # SteeperLogClient: httpx client for the log endpoint
 ├── repository.py     # SteeperRepository + OutgoingMessageSnapshot
 └── integrations/
     ├── aiogram.py     # SteeperMiddleware for aiogram v3
@@ -268,6 +341,7 @@ flowchart LR
 
     LIB -->|"POST /v1/communications/webhook/{bot_id}"| API[Steeper Platform\nFastAPI]
     LIB -->|"POST /v1/communications/webhook/{bot_id}/bot-message"| API
+    LIB -.->|"POST /v1/communications/webhook/{bot_id}/logs (optional)"| API
 
     API --> DB[(PostgreSQL)]
     API -->|publish| MQ{{RabbitMQ\nexchange: steeper.events}}
@@ -314,6 +388,7 @@ the **raw `bot_token` is never sent over the network**.
 |----------|---------|
 | `POST /v1/communications/webhook/{bot_id}` | Forward incoming Telegram updates (auth via `x-telegram-bot-api-secret-token` = SHA-256 of the bot token) |
 | `POST /v1/communications/webhook/{bot_id}/bot-message` | Record outgoing bot messages |
+| `POST /v1/communications/webhook/{bot_id}/logs` | Ship a batch of `logging` records (only with `capture_logs=True`) |
 
 **A. Incoming update**
 
@@ -342,6 +417,33 @@ Body:
 
 Backend responses: `200`, `400` (malformed payload), `403` (invalid secret), `404`
 (bot or Telegram user not found).
+
+**C. Log batch** (only with `capture_logs=True`)
+
+```
+POST {base_url}/v1/communications/webhook/{bot_id}/logs
+Header: x-telegram-bot-api-secret-token: <token_hash = SHA-256(bot_token)>
+Body:
+{
+  "records": [                     // 1..500 records, oldest first
+    {
+      "ts":      1700000000.123,   // bot-side Unix timestamp
+      "level":   "ERROR",          // DEBUG | INFO | WARNING | ERROR | CRITICAL
+      "logger":  "app.handlers.start",
+      "message": "Failed to answer callback query",
+      "module":  "start",          // optional
+      "func":    "cmd_start",      // optional
+      "line":    42,               // optional
+      "exc":     "Traceback ...",  // optional, formatted traceback
+      "extra":   {"chat_id": 1}    // optional, structured context
+    }
+  ]
+}
+```
+
+Backend responses: `200`, `400` (malformed payload), `403` (invalid secret),
+`404` (bot not found), `500` (log storage unavailable). Every non-2xx is logged
+at DEBUG and the batch is dropped — the bot is never affected.
 
 ### Incoming flow (user → bot → Steeper)
 
@@ -413,7 +515,7 @@ Important notes about the outgoing flow:
 - **Never breaks the bot.** If the backend is unreachable or returns an error, the
   library logs a `warning` and keeps going — your handlers and replies to the user
   are unaffected.
-- **Never slows the bot down.** Every call to Steeper is fire-and-forget: the
+- **Never slows the bot down.** Every call to Steeper, log batches included, is fire-and-forget: the
   library schedules the request and returns immediately, so the client `timeout`
   (10s by default) bounds the background request, never your handler.
 - **At-most-once delivery.** A failed forward is logged and dropped — there is no
@@ -442,6 +544,11 @@ contract above must match on the client and the server.
 |---------------------|-----------------|
 | `0.1.4` and newer   | bot-message authenticated via the `x-telegram-bot-api-secret-token` header (current) |
 | `0.1.3` and older   | bot-message authenticated via `token_hash` in the URL path (legacy) |
+
+`capture_logs=True` additionally requires a backend that serves
+`POST /v1/communications/webhook/{bot_id}/logs`. Against an older backend the
+endpoint answers `404`, log batches are dropped with a DEBUG line, and
+everything else keeps working.
 
 As long as the backend keeps the `v1` contract above, any `0.x` client works. Breaking changes to the contract will bump the API version (`/v2`) and the library minor version together.
 

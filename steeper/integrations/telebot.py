@@ -22,6 +22,7 @@ import logging
 from typing import Any
 
 from steeper._background import fire_and_forget_threadsafe, run_threadsafe
+from steeper._logging import LogCapture, LogCaptureOptions
 from steeper.repository import OutgoingMessageSnapshot, SteeperRepository, text_from_message_body
 
 logger = logging.getLogger("steeper.telebot")
@@ -173,13 +174,41 @@ class SteeperMiddleware:
         bot_token: str,
         *,
         timeout: float = 10.0,
+        capture_logs: bool = False,
+        log_level: int | str = "INFO",
+        log_batch_size: int = 100,
+        log_flush_interval: float = 2.0,
+        log_exclude_loggers: frozenset[str] | set[str] | None = None,
     ) -> None:
+        """Create the integration.
+
+        Args beyond the connection settings:
+            capture_logs: Also ship the bot process's ``logging`` output to
+                Steeper, so the platform can show its system logs.
+            log_level: Minimum level captured. ``DEBUG`` on a chatty bot is a lot
+                of traffic, hence the ``INFO`` default.
+            log_batch_size: Records buffered before a batch is shipped.
+            log_flush_interval: Seconds between flushes of a partial batch.
+            log_exclude_loggers: Extra logger-name prefixes never shipped, on top
+                of Steeper's own and its HTTP stack (which must stay excluded to
+                avoid a logging loop).
+        """
         self._repository = SteeperRepository(
             base_url=base_url,
             bot_id=bot_id,
             bot_token=bot_token,
             timeout=timeout,
         )
+        self._log_capture = LogCapture(
+            LogCaptureOptions(
+                enabled=capture_logs,
+                level=log_level,
+                batch_size=log_batch_size,
+                flush_interval=log_flush_interval,
+                exclude_loggers=frozenset(log_exclude_loggers) if log_exclude_loggers else None,
+            )
+        )
+        self._timeout = timeout
 
     def setup(self, bot: _telebot.TeleBot) -> None:
         """Register Steeper hooks on a sync TeleBot instance.
@@ -192,6 +221,7 @@ class SteeperMiddleware:
         _token_repos[bot.token] = self._repository
         _ensure_apihelper_patch()
         _wrap_process_new_updates(bot, self._repository)
+        self._log_capture.start(self._repository.config, timeout=self._timeout)
 
         logger.info("Steeper middleware registered for pyTelegramBotAPI")
 
@@ -202,6 +232,7 @@ class SteeperMiddleware:
         called by hand — typically in a ``finally`` around ``bot.polling()``. Best-effort:
         it never raises.
         """
+        self._log_capture.stop()
         run_threadsafe(self._repository.aclose(), timeout=timeout)
 
     @property
