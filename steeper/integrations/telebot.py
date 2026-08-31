@@ -22,6 +22,7 @@ import logging
 from typing import Any
 
 from steeper._background import fire_and_forget_threadsafe, run_threadsafe
+from steeper._events import EventTracker
 from steeper._logging import LogCapture, LogCaptureOptions
 from steeper.repository import OutgoingMessageSnapshot, SteeperRepository, text_from_message_body
 
@@ -174,6 +175,8 @@ class SteeperMiddleware:
         bot_token: str,
         *,
         timeout: float = 10.0,
+        event_batch_size: int = 50,
+        event_flush_interval: float = 5.0,
         capture_logs: bool = False,
         log_level: int | str = "INFO",
         log_batch_size: int = 100,
@@ -183,6 +186,11 @@ class SteeperMiddleware:
         """Create the integration.
 
         Args beyond the connection settings:
+            event_batch_size: Events buffered by :meth:`track` before a batch is
+                shipped early.
+            event_flush_interval: Seconds between flushes of a partial event
+                batch. Events are far rarer than log records, so this is longer
+                than its logging counterpart.
             capture_logs: Also ship the bot process's ``logging`` output to
                 Steeper, so the platform can show its system logs.
             log_level: Minimum level captured. ``DEBUG`` on a chatty bot is a lot
@@ -198,6 +206,8 @@ class SteeperMiddleware:
             bot_id=bot_id,
             bot_token=bot_token,
             timeout=timeout,
+            event_batch_size=event_batch_size,
+            event_flush_interval=event_flush_interval,
         )
         self._log_capture = LogCapture(
             LogCaptureOptions(
@@ -225,6 +235,37 @@ class SteeperMiddleware:
 
         logger.info("Steeper middleware registered for pyTelegramBotAPI")
 
+    def track(
+        self,
+        name: str,
+        *,
+        user_id: int,
+        props: dict[str, Any] | None = None,
+        ts: float | None = None,
+    ) -> None:
+        """Report one product event, for the platform to build funnels from.
+
+        Synchronous and non-blocking: it buffers the event and returns, so it is
+        safe to call from anywhere, including a hot handler.
+
+        Steps like "finished onboarding" or "paid" never appear in Telegram
+        traffic, so the bot has to say so itself::
+
+            @bot.message_handler(commands=["buy"])
+            def buy(message):
+                steeper.track("checkout_started", user_id=message.from_user.id)
+
+        Args:
+            name: Event name, matched verbatim against a funnel's steps. Keep it
+                stable — renaming an event breaks every funnel built on it.
+            user_id: Telegram id of the user, i.e. the raw ``from_user.id``.
+            props: Optional structured context. Stored, but not used for funnel
+                matching, and neither indexed nor searchable yet.
+            ts: Unix timestamp; defaults to now. Pass it only when replaying an
+                event whose real time differs from the call.
+        """
+        self._repository.track(name, user_id=user_id, props=props, ts=ts)
+
     def close(self, *, timeout: float = 5.0) -> None:
         """Close the underlying HTTP client, blocking until it is done.
 
@@ -233,7 +274,31 @@ class SteeperMiddleware:
         it never raises.
         """
         self._log_capture.stop()
+        # Flushed here rather than inside ``aclose`` below: shipping the last
+        # events can take up to the client timeout, and ``timeout`` bounds the
+        # whole call — routing it through there would abandon the flush that
+        # matters most, the one holding the newest funnel steps.
+        self._repository.tracker.close()
         run_threadsafe(self._repository.aclose(), timeout=timeout)
+
+    @property
+    def tracker(self) -> EventTracker:
+        """The event tracker backing :meth:`track`.
+
+        This, not the middleware, is what handlers should depend on. It knows
+        nothing about Telegram or this framework — only ``track`` — so a handler
+        taking it can be tested without an HTTP client or a dispatcher, and it
+        drops into a DI container as an ordinary provider::
+
+            dp = Dispatcher(tracker=steeper.tracker)
+
+            async def buy(message: Message, tracker: EventTracker) -> None:
+                tracker.track("checkout_started", user_id=message.from_user.id)
+
+        :meth:`track` on the middleware is the shorthand for bots small enough
+        not to want the wiring.
+        """
+        return self._repository.tracker
 
     @property
     def repository(self) -> SteeperRepository:

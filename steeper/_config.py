@@ -75,6 +75,10 @@ class SteeperConfig:
     def logs_url(self) -> str:
         return f"{self._base}/v1/communications/webhook/{quote(self.bot_id, safe='')}/logs"
 
+    @property
+    def events_url(self) -> str:
+        return f"{self._base}/v1/communications/webhook/{quote(self.bot_id, safe='')}/events"
+
     def secret_matches(self, candidate: str) -> bool:
         """Constant-time comparison helper for the auth secret."""
         return hmac.compare_digest(self.token_hash, candidate)

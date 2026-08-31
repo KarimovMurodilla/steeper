@@ -26,6 +26,10 @@ def __getattr__(name: str) -> Any:
         from steeper._logging import install_log_handler
 
         return install_log_handler
+    if name == "EventTracker":
+        from steeper._events import EventTracker
+
+        return EventTracker
     if name == "OutgoingMessageSnapshot":
         from steeper.repository import OutgoingMessageSnapshot
 
@@ -40,4 +44,5 @@ __all__ = [
     "OutgoingMessageSnapshot",
     "SteeperLogHandler",
     "install_log_handler",
+    "EventTracker",
 ]

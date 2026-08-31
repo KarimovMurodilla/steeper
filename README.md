@@ -24,6 +24,7 @@ Telegram bot middleware that syncs incoming user messages and outgoing bot repli
 - [The Steeper backend](#the-steeper-backend)
 - [How they interact](#how-they-interact)
 - [System logs](#system-logs)
+- [Product events and funnels](#product-events-and-funnels)
 - [Library guarantees and behavior](#library-guarantees-and-behavior)
 - [Backend compatibility](#backend-compatibility)
 - [License](#license)
@@ -122,6 +123,17 @@ is a loop that ends in a crash, not a dropped record. Anything you pass to
 Capture is off by default: it is extra outbound traffic and extra storage on the
 backend, so it should be an explicit choice.
 
+### Optional: event batching
+
+`track()` needs no switch — it is off until the bot calls it, and the tracker
+opens no thread or connection before the first event. Two knobs tune the
+batching:
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `event_batch_size` | `50` | Events buffered before a batch is shipped (capped at 500, the backend's limit) |
+| `event_flush_interval` | `5.0` | Seconds between flushes of a partial batch |
+
 ### Prerequisite: register the bot
 
 1. Bring up the Steeper backend (Docker Compose) and create a superuser.
@@ -213,7 +225,7 @@ app.run_polling()
 
 ## How it works
 
-All HTTP calls to Steeper go through **`SteeperRepository`** (`steeper.repository`): it forwards **incoming** updates and records **outgoing** bot messages to your backend. Log capture is separate — see [System logs](#system-logs). Each `SteeperMiddleware` exposes `.repository` (and `.client` for the underlying async HTTP client).
+All HTTP calls to Steeper go through **`SteeperRepository`** (`steeper.repository`): it forwards **incoming** updates and records **outgoing** bot messages to your backend. Log capture and event tracking are separate — see [System logs](#system-logs) and [Product events and funnels](#product-events-and-funnels). Each `SteeperMiddleware` exposes `.repository` (and `.client` for the underlying async HTTP client).
 
 1. **Incoming** — the integration passes the **full** Telegram update, as Telegram-shaped JSON, to `repository.forward_update(...)` (every update type — messages, callback queries, inline queries, etc. — with all fields preserved). Your handlers still run as usual.
 
@@ -275,6 +287,130 @@ handler = SteeperLogHandler(steeper.repository.config, level=logging.WARNING)
 logging.getLogger("app.payments").addHandler(handler)
 ```
 
+### Product events and funnels
+
+Telegram traffic tells the platform that a user sent a message. It cannot tell
+it that the user finished onboarding, opened a plan, or paid — those steps live
+inside your bot's code. `track()` is how they get out, and the platform builds
+funnels from them:
+
+```python
+@router.message(F.text == "/buy")
+async def buy(message: Message, tracker: EventTracker) -> None:
+    tracker.track("checkout_started", user_id=message.from_user.id)
+    ...
+    tracker.track(
+        "payment_succeeded",
+        user_id=message.from_user.id,
+        props={"plan": "pro", "amount": 4900},
+    )
+```
+
+| Argument | Required | Description |
+|----------|----------|-------------|
+| `name` | yes | Event name, matched **verbatim** against a funnel's steps. Keep it stable — renaming an event breaks every funnel built on it. Max 128 characters |
+| `user_id` | yes | Telegram id of the user, i.e. the raw `from_user.id` — not a Steeper-side identifier |
+| `props` | no | Structured context. Stored, but not used for funnel matching, and neither indexed nor searchable yet. Max 50 keys, 8 000 serialized characters |
+| `ts` | no | Unix timestamp; defaults to now. Pass it only when replaying an event whose real time differs from the call |
+
+`track()` is a plain method, not a coroutine, on purpose: it only appends to a
+buffer, and making it awaitable would suggest the bot should wait for
+something. Call it the same way from an aiogram handler and a telebot worker
+thread.
+
+An event that fails validation — an empty name, a `user_id` that is not an
+`int` — is dropped with a warning rather than raised. `track()` is called from
+inside handlers, and a mistyped analytics call must not take a reply down with
+it. The first rejection logs at WARNING and the rest at DEBUG, so a bad call in
+a hot handler cannot flood the output.
+
+#### What your handlers should depend on
+
+Give handlers `middleware.tracker`, not the middleware.
+
+`SteeperMiddleware` owns an HTTP client, a repository, log capture, a patched
+`Bot.__call__` and a lifecycle. A handler needs exactly one of those things —
+`track` — and a middleware is meant to be registered with the framework and then
+forgotten. `EventTracker` is that narrow dependency: it knows nothing about
+Telegram, or about which framework you use, so it drops into whatever wiring you
+already have.
+
+```python
+async def main() -> None:
+    steeper = SteeperMiddleware(base_url=..., bot_id=..., bot_token=BOT_TOKEN)
+
+    bot = Bot(token=BOT_TOKEN)
+    dp = Dispatcher(tracker=steeper.tracker)   # aiogram injects by parameter name
+    dp.include_router(router)
+
+    steeper.setup(dp, bot)   # after this line the middleware is not referred to again
+    await dp.start_polling(bot)
+```
+
+Each framework has its own place for this, and the examples use it:
+
+| Framework | Where the tracker goes | How a handler gets it |
+|-----------|------------------------|-----------------------|
+| **aiogram** | `Dispatcher(tracker=steeper.tracker)` (workflow data) | declare a `tracker: EventTracker` parameter |
+| **python-telegram-bot** | `app.bot_data["tracker"] = steeper.tracker` | `context.bot_data["tracker"]` |
+| **telebot** | a module-level name | closure — the framework has no DI or context object |
+
+The payoff is that a handler becomes testable on its own, with no HTTP client,
+no dispatcher and no `setup()`:
+
+```python
+async def test_buy_reports_checkout() -> None:
+    tracker = FakeTracker()
+    await buy(message, tracker)
+    assert tracker.events == [("checkout_started", 42)]
+```
+
+`middleware.track(...)` does the same thing and stays supported — it is the
+shorthand for a bot small enough not to want the wiring.
+
+#### Behavior
+
+Event shipping follows the log handler's shape, with one deliberate difference:
+
+- **Batched, not per-event.** `track()` only appends to an in-memory deque. A
+  background thread flushes every `event_flush_interval` seconds, or as soon as
+  `event_batch_size` events are waiting, and posts the batch in one request.
+- **Timestamped when called, not when flushed.** The backend orders funnel
+  steps by `ts`, so stamping at flush time would collapse a batch into one
+  instant and scramble every step order inside it.
+- **Bounded, dropping the oldest.** At most 10 000 events are held while the
+  backend is unreachable. Past that the *oldest* are discarded — the same
+  choice as logs, for a different reason. Losing a funnel's *entry* events
+  removes those users from the report entirely, which shrinks the window but
+  leaves the conversion rate roughly unbiased; losing the *later* events of
+  users already counted at step one drags the numerator down and reports
+  conversion that never dropped as a drop. Dropping the oldest sheds whole
+  users; dropping the newest would manufacture false non-conversion.
+- **Loud about failures.** A failed batch logs at WARNING, unlike a log batch,
+  which logs at DEBUG. A lost event is a permanently wrong funnel number and
+  nothing else will ever mention it; log batches stay quiet only because
+  warning about them would flood the very output being read.
+- **Flushed on shutdown.** `close()` / `aclose()` ships what is still buffered
+  before returning — the events held at that moment are the newest ones, which
+  is exactly where a funnel's last step tends to live.
+- **Shipped on its own loop and client.** Like log batches, events go out on
+  the shared background loop with a dedicated `httpx.AsyncClient`.
+
+Outside a middleware entirely — a worker, a management command, a web handler
+that shares the bot's backend — build a tracker of your own:
+
+```python
+from steeper import EventTracker, SteeperConfig
+
+tracker = EventTracker(SteeperConfig(base_url=..., bot_id=..., bot_token=...))
+tracker.track("payment_succeeded", user_id=123456789)
+...
+tracker.close()   # ships what is still buffered
+```
+
+One tracker per process is the intent: each owns a buffer, a flush thread and a
+connection. Prefer passing `steeper.tracker` around over building a second one.
+
 ### Shutting down
 
 The middleware owns an `httpx.AsyncClient`, which should be closed when the bot
@@ -310,6 +446,8 @@ For manual scenarios, the package also exports:
 - `steeper.OutgoingMessageSnapshot` — a normalized outgoing message.
 - `steeper.SteeperLogHandler` — a `logging.Handler` that ships records to
   Steeper; `steeper.install_log_handler(...)` attaches one to a logger.
+- `steeper.EventTracker` — buffers and ships product events; backs `track()`,
+  and the dependency to hand to handlers. Reachable as `middleware.tracker`.
 
 ### Internal layout
 
@@ -319,6 +457,8 @@ steeper/
 ├── _client.py        # SteeperClient: httpx, sending, secret redaction in logs
 ├── _logging.py       # SteeperLogHandler: capture, batching, bounded buffer
 ├── _log_client.py    # SteeperLogClient: httpx client for the log endpoint
+├── _events.py        # EventTracker: track(), batching, bounded buffer
+├── _event_client.py  # SteeperEventClient: httpx client for the event endpoint
 ├── repository.py     # SteeperRepository + OutgoingMessageSnapshot
 └── integrations/
     ├── aiogram.py     # SteeperMiddleware for aiogram v3
@@ -342,6 +482,7 @@ flowchart LR
     LIB -->|"POST /v1/communications/webhook/{bot_id}"| API[Steeper Platform\nFastAPI]
     LIB -->|"POST /v1/communications/webhook/{bot_id}/bot-message"| API
     LIB -.->|"POST /v1/communications/webhook/{bot_id}/logs (optional)"| API
+    LIB -.->|"POST /v1/communications/webhook/{bot_id}/events (optional)"| API
 
     API --> DB[(PostgreSQL)]
     API -->|publish| MQ{{RabbitMQ\nexchange: steeper.events}}
@@ -350,8 +491,9 @@ flowchart LR
 ```
 
 The key idea: **the library knows nothing about the platform's internal model.**
-It talks to just two HTTP endpoints and passes data in Telegram format. All domain
-logic (chats, users, events) is done by the backend.
+It talks to a handful of HTTP endpoints and passes Telegram traffic through in
+Telegram's own format. All domain logic — chats, users, funnel matching — is done
+by the backend.
 
 ---
 
@@ -377,18 +519,20 @@ endpoint contract itself is documented under
 
 ## How they interact
 
-### The HTTP contract (the whole interaction is two requests)
+### The HTTP contract
 
-Both endpoints identify the bot by `bot_id` in the path and authenticate with the
-secret (`token_hash` = SHA-256 of the bot token) in the
+Every endpoint identifies the bot by `bot_id` in the path and authenticates with
+the secret (`token_hash` = SHA-256 of the bot token) in the
 `x-telegram-bot-api-secret-token` header — the secret never appears in the URL, and
-the **raw `bot_token` is never sent over the network**.
+the **raw `bot_token` is never sent over the network**. Only the first two are
+always in play; logs and events are each used only when you turn them on.
 
 | Endpoint | Purpose |
 |----------|---------|
 | `POST /v1/communications/webhook/{bot_id}` | Forward incoming Telegram updates (auth via `x-telegram-bot-api-secret-token` = SHA-256 of the bot token) |
 | `POST /v1/communications/webhook/{bot_id}/bot-message` | Record outgoing bot messages |
 | `POST /v1/communications/webhook/{bot_id}/logs` | Ship a batch of `logging` records (only with `capture_logs=True`) |
+| `POST /v1/communications/webhook/{bot_id}/events` | Ship a batch of product events (only when the bot calls `track()`) |
 
 **A. Incoming update**
 
@@ -537,7 +681,7 @@ Important notes about the outgoing flow:
 
 ## Backend compatibility
 
-This library talks to the Steeper backend's **`/v1`** HTTP API. The two-endpoint
+This library talks to the Steeper backend's **`/v1`** HTTP API. The endpoint
 contract above must match on the client and the server.
 
 | `steeper` (library) | Steeper backend |
@@ -549,6 +693,11 @@ contract above must match on the client and the server.
 `POST /v1/communications/webhook/{bot_id}/logs`. Against an older backend the
 endpoint answers `404`, log batches are dropped with a DEBUG line, and
 everything else keeps working.
+
+`track()` likewise requires a backend serving
+`POST /v1/communications/webhook/{bot_id}/events`. An older one answers `404`
+and every batch is dropped — with a WARNING, not a DEBUG line, because unlike
+logs there is no other place the loss would show up.
 
 As long as the backend keeps the `v1` contract above, any `0.x` client works. Breaking changes to the contract will bump the API version (`/v2`) and the library minor version together.
 
