@@ -11,7 +11,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Features
 
 * implement system logs view through steeper platform ([034bb9a](https://github.com/KarimovMurodilla/steeper/commit/034bb9a61ca34fada74804a69f129b22dedeef3d))
-* implement system logs view through steeper platform ([ca4d112](https://github.com/KarimovMurodilla/steeper/commit/ca4d11270a4df7d55963e0aa74ce47cf4f62c8c1))
 
 ## [0.2.0](https://github.com/KarimovMurodilla/steeper/compare/v0.1.5...v0.2.0) (2026-08-16)
 
