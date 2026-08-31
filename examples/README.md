@@ -33,3 +33,26 @@ shipped to the platform and shown on the **Logs** page of the operator panel.
 Records are batched (by default up to 100 of them, or every 2 seconds), so a
 line can take a moment to appear. Capture is off by default in the library —
 drop `capture_logs=True` if you only want conversations mirrored.
+
+## Product events
+
+Every example also reports funnel events with `steeper.track(...)`: `/start`
+sends `signup`, and `/buy` sends `checkout_started` followed by
+`payment_succeeded`. Send both commands, then open the Funnels page in the
+panel and build a funnel over those three names to watch the drop-off.
+
+Two things to expect. Events are batched, so an event appears a few seconds
+after the command rather than instantly. And a step whose name does not match
+what the bot actually sends reports zero users — indistinguishable from real
+non-conversion, which is why the funnel builder suggests names the bot has
+already used.
+
+Unlike log capture there is no switch to turn on: tracking costs nothing until
+the bot makes its first `track()` call.
+
+Note what the handlers depend on. They take an `EventTracker`, never the
+`SteeperMiddleware` — the middleware is registered in the composition root and
+not mentioned again. aiogram injects the tracker by parameter name, PTB passes
+it through `context.bot_data`, and telebot, which has neither DI nor a context
+object, falls back to a module-level name. A handler written this way can be
+tested by handing it a fake, with no HTTP client and no dispatcher.
